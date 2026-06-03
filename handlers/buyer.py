@@ -1,0 +1,517 @@
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
+
+from handlers.states import BuyerStates
+from keyboards.inline import (
+    property_type_kb, viloyat_kb, tuman_kb, mahalla_kb,
+    xonalar_kb, dom_type_filter_kb, renovation_filter_kb,
+    results_nav_kb, contact_kb, kb,
+)
+from keyboards.reply import cancel_kb, main_menu_kb, remove_kb
+import database as db
+from utils.helpers import (
+    listing_full_card, listing_short_line,
+    format_price, mask_phone,
+)
+
+router = Router()
+
+FILTER_KEY_TTL = 300   # seconds (not used yet, placeholder)
+
+
+# ── Entry point ──────────────────────────────────────────────────
+@router.message(F.text.in_({"🔍 Uy qidirish", "🔍 Qidirish"}))
+async def start_search(msg: Message, state: FSMContext):
+    await state.clear()
+    await msg.answer(
+        "🔍 <b>Qidiruv</b>\n\nNimani qidiryapsiz?",
+        reply_markup=property_type_kb("bs"),
+        parse_mode="HTML",
+    )
+    await state.set_state(BuyerStates.property_type)
+
+
+# ── Property type ────────────────────────────────────────────────
+@router.callback_query(BuyerStates.property_type, F.data.startswith("bs:pt:"))
+async def buyer_property_type(cb: CallbackQuery, state: FSMContext):
+    pt = cb.data.split(":")[2]
+    await state.update_data(property_type=pt)
+    await cb.message.edit_text(
+        "📍 Qayerdan qidiramiz?\n\nViloyatni tanlang yoki butun Uzbekiston bo'ylab qidiring.",
+        reply_markup=_location_choice_kb(),
+    )
+    await state.set_state(BuyerStates.location_choice)
+    await cb.answer()
+
+
+def _location_choice_kb():
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗺 Butun O'zbekiston", callback_data="bc:loc:all")],
+        [InlineKeyboardButton(text="📍 Viloyat tanlash",   callback_data="bc:loc:pick")],
+        [InlineKeyboardButton(text="❌ Bekor qilish",       callback_data="bc:cancel")],
+    ])
+
+
+@router.callback_query(BuyerStates.location_choice, F.data == "bc:loc:all")
+async def buyer_loc_all(cb: CallbackQuery, state: FSMContext):
+    await state.update_data(location_id=None)
+    await _ask_xonalar(cb.message, state, edit=True)
+    await cb.answer()
+
+
+@router.callback_query(BuyerStates.location_choice, F.data == "bc:loc:pick")
+async def buyer_loc_pick(cb: CallbackQuery, state: FSMContext):
+    viloyatlar = await db.get_viloyatlar()
+    await cb.message.edit_text(
+        "🗺 Viloyatni tanlang:",
+        reply_markup=viloyat_kb(viloyatlar, "bv"),
+    )
+    await state.set_state(BuyerStates.viloyat)
+    await cb.answer()
+
+
+@router.callback_query(BuyerStates.location_choice, F.data == "bc:cancel")
+async def buyer_cancel_cb(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    user = await db.get_user(cb.from_user.id)
+    role = user.get("role", "buyer") if user else "buyer"
+    await cb.message.edit_text("Bekor qilindi.")
+    await cb.message.answer("Asosiy menyu 👇", reply_markup=main_menu_kb(role))
+    await cb.answer()
+
+
+# ── Viloyat ──────────────────────────────────────────────────────
+@router.callback_query(BuyerStates.viloyat, F.data.startswith("bv:"))
+async def buyer_viloyat(cb: CallbackQuery, state: FSMContext):
+    action = cb.data.split(":")[1]
+    if action == "back":
+        await cb.message.edit_text(
+            "📍 Qayerdan qidiramiz?",
+            reply_markup=_location_choice_kb(),
+        )
+        await state.set_state(BuyerStates.location_choice)
+        await cb.answer()
+        return
+
+    viloyat = action
+    await state.update_data(viloyat=viloyat)
+    tumanlar = await db.get_tumanlar(viloyat)
+    await cb.message.edit_text(
+        f"📍 <b>{viloyat}</b>\n\nTumanni tanlang:",
+        reply_markup=tuman_kb(tumanlar, "bt"),
+        parse_mode="HTML",
+    )
+    await state.set_state(BuyerStates.tuman)
+    await cb.answer()
+
+
+# ── Tuman ────────────────────────────────────────────────────────
+@router.callback_query(BuyerStates.tuman, F.data.startswith("bt:"))
+async def buyer_tuman(cb: CallbackQuery, state: FSMContext):
+    action = cb.data.split(":")[1]
+    if action == "back":
+        viloyatlar = await db.get_viloyatlar()
+        await cb.message.edit_text(
+            "🗺 Viloyatni tanlang:",
+            reply_markup=viloyat_kb(viloyatlar, "bv"),
+        )
+        await state.set_state(BuyerStates.viloyat)
+        await cb.answer()
+        return
+
+    tuman = action
+    data = await state.get_data()
+    await state.update_data(tuman=tuman)
+    await _show_mahallalar_buyer(cb.message, state, data["viloyat"], tuman, offset=0, edit=True)
+    await state.set_state(BuyerStates.mahalla_page)
+    await cb.answer()
+
+
+# ── Mahalla pagination ───────────────────────────────────────────
+async def _show_mahallalar_buyer(msg, state, viloyat, tuman, offset=0, query="", edit=False):
+    PER_PAGE = 8
+    mahallalar = await db.search_mahallalar(viloyat, tuman, query, PER_PAGE, offset)
+    total      = await db.count_mahallalar(viloyat, tuman, query)
+
+    text = (
+        f"📍 <b>{viloyat} › {tuman}</b>\n"
+        f"Mahallani tanlang ({total} ta):"
+    )
+    markup = mahalla_kb(mahallalar, total, offset, "bm")
+    if edit:
+        await msg.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    else:
+        await msg.answer(text, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(BuyerStates.mahalla_page, F.data.startswith("bm:"))
+async def buyer_mahalla_page(cb: CallbackQuery, state: FSMContext):
+    parts = cb.data.split(":")
+    action = parts[1]
+    data = await state.get_data()
+
+    if action == "pg":
+        offset = int(parts[2])
+        await _show_mahallalar_buyer(
+            cb.message, state,
+            data["viloyat"], data["tuman"], offset,
+            data.get("mah_query", ""),
+            edit=True,
+        )
+        await cb.answer()
+        return
+
+    if action == "search":
+        await cb.message.edit_text(
+            "🔍 Mahalla nomini yozing (masalan: Chilonzor, Yunusob...):",
+        )
+        await state.set_state(BuyerStates.mahalla_search)
+        await cb.answer()
+        return
+
+    if action == "back":
+        tumanlar = await db.get_tumanlar(data["viloyat"])
+        await cb.message.edit_text(
+            f"📍 <b>{data['viloyat']}</b>\n\nTumanni tanlang:",
+            reply_markup=tuman_kb(tumanlar, "bt"),
+            parse_mode="HTML",
+        )
+        await state.set_state(BuyerStates.tuman)
+        await cb.answer()
+        return
+
+    if action == "pick":
+        loc_id = int(parts[2])
+        await state.update_data(location_id=loc_id)
+        await _ask_xonalar(cb.message, state, edit=True)
+        await cb.answer()
+        return
+
+    await cb.answer()
+
+
+@router.message(BuyerStates.mahalla_search)
+async def buyer_mah_search(msg: Message, state: FSMContext):
+    query = msg.text.strip()
+    await state.update_data(mah_query=query)
+    data = await state.get_data()
+    await _show_mahallalar_buyer(
+        msg, state,
+        data["viloyat"], data["tuman"], 0, query,
+    )
+    await state.set_state(BuyerStates.mahalla_page)
+
+
+# ── Xonalar filter ───────────────────────────────────────────────
+async def _ask_xonalar(msg, state, edit=False):
+    text = "🛏 Nechta xona?"
+    markup = xonalar_kb("bx", with_any=True)
+    if edit:
+        await msg.edit_text(text, reply_markup=markup)
+    else:
+        await msg.answer(text, reply_markup=markup)
+    await state.set_state(BuyerStates.xonalar)
+
+
+@router.callback_query(BuyerStates.xonalar, F.data.startswith("bx:"))
+async def buyer_xonalar(cb: CallbackQuery, state: FSMContext):
+    val = cb.data.split(":")[1]   # "1","2","3","4","4+","any"
+    xonalar = None if val == "any" else val
+    await state.update_data(xonalar=xonalar)
+    await cb.message.edit_text(
+        "🏗 Turar-joy turi?",
+        reply_markup=dom_type_filter_kb(),
+    )
+    await state.set_state(BuyerStates.dom_type)
+    await cb.answer()
+
+
+# ── Dom type filter ──────────────────────────────────────────────
+@router.callback_query(BuyerStates.dom_type, F.data.startswith("fdt:"))
+async def buyer_dom_type(cb: CallbackQuery, state: FSMContext):
+    val = cb.data.split(":")[1]
+    dom_type = None if val == "any" else val
+    await state.update_data(dom_type=dom_type)
+    await cb.message.edit_text(
+        "🔨 Ta'mirlash holati?",
+        reply_markup=renovation_filter_kb(),
+    )
+    await state.set_state(BuyerStates.renovation)
+    await cb.answer()
+
+
+# ── Renovation filter → run search ──────────────────────────────
+@router.callback_query(BuyerStates.renovation, F.data.startswith("fren:"))
+async def buyer_renovation(cb: CallbackQuery, state: FSMContext):
+    val = cb.data.split(":")[1]
+    renovation = None if val == "any" else val
+    await state.update_data(renovation=renovation, results_offset=0)
+    await _show_results(cb.message, state, offset=0, edit=True)
+    await cb.answer()
+
+
+# ── Results ──────────────────────────────────────────────────────
+async def _show_results(msg, state, offset=0, edit=False):
+    data = await state.get_data()
+    PER_PAGE = 5
+
+    results = await db.search_listings(
+        property_type=data.get("property_type"),
+        location_id=data.get("location_id"),
+        xonalar=data.get("xonalar"),
+        dom_type=data.get("dom_type"),
+        renovation=data.get("renovation"),
+        limit=PER_PAGE,
+        offset=offset,
+    )
+
+    if not results:
+        text = (
+            "😔 <b>Hech narsa topilmadi.</b>\n\n"
+            "Filtrlarni o'zgartirib qaytadan qidiring yoki "
+            "yangi e'lonlar uchun obuna bo'ling."
+        )
+        markup = kb(
+            [("🔄 Qaytadan qidirish", "br:restart"), ("🔔 Obuna bo'lish", "br:subscribe")],
+        )
+        if edit:
+            await msg.edit_text(text, reply_markup=markup, parse_mode="HTML")
+        else:
+            await msg.answer(text, reply_markup=markup, parse_mode="HTML")
+        await state.set_state(BuyerStates.results)
+        return
+
+    # Build total count approximately
+    total_results = await db.search_listings(
+        property_type=data.get("property_type"),
+        location_id=data.get("location_id"),
+        xonalar=data.get("xonalar"),
+        dom_type=data.get("dom_type"),
+        renovation=data.get("renovation"),
+        limit=200, offset=0,
+    )
+    total = len(total_results)
+
+    lines = [f"🔍 <b>{total} ta e'lon topildi</b> (ko'rsatilmoqda {offset+1}–{min(offset+PER_PAGE, total)}):\n"]
+    for i, lst in enumerate(results, start=offset + 1):
+        lines.append(f"{i}. {listing_short_line(lst)}")
+
+    lines.append("\n👇 Batafsil ko'rish uchun raqamini yozing (masalan: 1)")
+
+    # Save results IDs so user can pick by number
+    await state.update_data(
+        result_ids=[r["id"] for r in results],
+        results_offset=offset,
+        results_total=total,
+    )
+
+    filter_key = f"{data.get('property_type')}:{data.get('location_id')}:{data.get('xonalar')}:{data.get('dom_type')}:{data.get('renovation')}"
+    markup = results_nav_kb(offset, total, filter_key)
+
+    text = "\n".join(lines)
+    if edit:
+        await msg.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    else:
+        await msg.answer(text, reply_markup=markup, parse_mode="HTML")
+
+    await state.set_state(BuyerStates.results)
+
+    # Save to search history
+    await db.save_search(msg.chat.id if hasattr(msg, "chat") else msg.from_user.id, {
+        "property_type": data.get("property_type"),
+        "location_id":   data.get("location_id"),
+        "xonalar":       data.get("xonalar"),
+        "dom_type":      data.get("dom_type"),
+        "renovation":    data.get("renovation"),
+    })
+
+
+# ── Results navigation ───────────────────────────────────────────
+@router.callback_query(BuyerStates.results, F.data.startswith("rn:"))
+async def results_nav(cb: CallbackQuery, state: FSMContext):
+    parts = cb.data.split(":")
+    action = parts[1]
+
+    if action == "more":
+        data = await state.get_data()
+        new_offset = data.get("results_offset", 0) + 5
+        await _show_results(cb.message, state, offset=new_offset, edit=True)
+
+    elif action == "new":
+        await start_search(cb.message, state)
+
+    elif action == "sub":
+        data = await state.get_data()
+        await db.save_subscription(cb.from_user.id, {
+            "property_type": data.get("property_type"),
+            "location_id":   data.get("location_id"),
+            "xonalar":       data.get("xonalar"),
+            "dom_type":      data.get("dom_type"),
+            "renovation":    data.get("renovation"),
+        })
+        await cb.answer("✅ Obuna saqlandi! Yangi e'lonlar kelganda xabar beraman.", show_alert=True)
+        return
+
+    await cb.answer()
+
+
+# ── User picks result by number ──────────────────────────────────
+@router.message(BuyerStates.results)
+async def buyer_pick_result(msg: Message, state: FSMContext):
+    text = msg.text or ""
+
+    if text == "❌ Bekor qilish":
+        await state.clear()
+        user = await db.get_user(msg.from_user.id)
+        role = user.get("role", "buyer") if user else "buyer"
+        await msg.answer("Bekor qilindi.", reply_markup=main_menu_kb(role))
+        return
+
+    data = await state.get_data()
+    result_ids = data.get("result_ids", [])
+    offset = data.get("results_offset", 0)
+
+    try:
+        idx = int(text.strip()) - 1 - offset   # 0-based index in current page
+        if idx < 0 or idx >= len(result_ids):
+            raise ValueError
+    except ValueError:
+        await msg.answer("Iltimos, ro'yxatdagi raqamni kiriting (masalan: 1, 2, 3...)")
+        return
+
+    listing_id = result_ids[idx]
+    await show_listing_detail(msg, listing_id, msg.from_user.id)
+
+
+async def show_listing_detail(msg: Message, listing_id: int, user_id: int):
+    lst = await db.get_listing(listing_id)
+    if not lst:
+        await msg.answer("Bu e'lon topilmadi.")
+        return
+
+    loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else {}
+    text = listing_full_card(lst, loc)
+
+    await db.increment_views(listing_id)
+
+    markup = contact_kb(listing_id)
+
+    if lst.get("video_file_id"):
+        await msg.answer_video(lst["video_file_id"], caption=text, reply_markup=markup, parse_mode="HTML")
+    else:
+        await msg.answer(text, reply_markup=markup, parse_mode="HTML")
+
+
+# ── Contact / favorite callbacks ────────────────────────────────
+@router.callback_query(F.data.startswith("cl:"))
+async def contact_action(cb: CallbackQuery, state: FSMContext):
+    parts = cb.data.split(":")
+    action = parts[1]
+    listing_id = int(parts[2])
+
+    if action == "phone":
+        lst = await db.get_listing(listing_id)
+        if not lst:
+            await cb.answer("E'lon topilmadi.", show_alert=True)
+            return
+        seller = await db.get_user(lst["seller_id"])
+        phone = seller.get("phone", "—") if seller else "—"
+        await db.increment_contacts(listing_id)
+        await cb.answer(f"📞 {mask_phone(phone)}", show_alert=True)
+
+    elif action == "fav":
+        await db.add_favorite(cb.from_user.id, listing_id)
+        await cb.answer("❤️ Sevimlilarga qo'shildi!", show_alert=False)
+
+    elif action == "loc":
+        lst = await db.get_listing(listing_id)
+        if lst and lst.get("building_id"):
+            bld = await db.get_building(lst["building_id"])
+            if bld and bld.get("lat") and bld.get("lon"):
+                await cb.message.answer_location(bld["lat"], bld["lon"])
+                await cb.answer()
+                return
+        await cb.answer("Joylashuv ma'lumoti mavjud emas.", show_alert=True)
+
+    elif action == "report":
+        await cb.answer("Shikoyat yuborildi. Rahmat!", show_alert=True)
+
+    else:
+        await cb.answer()
+
+
+# ── Restart search from results nav ─────────────────────────────
+@router.callback_query(F.data == "br:restart")
+async def restart_search(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_text(
+        "🔍 <b>Yangi qidiruv</b>\n\nNimani qidiryapsiz?",
+        reply_markup=property_type_kb("bs"),
+        parse_mode="HTML",
+    )
+    await state.set_state(BuyerStates.property_type)
+    await cb.answer()
+
+
+@router.callback_query(F.data == "br:subscribe")
+async def subscribe_empty(cb: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    await db.save_subscription(cb.from_user.id, {
+        "property_type": data.get("property_type"),
+        "location_id":   data.get("location_id"),
+        "xonalar":       data.get("xonalar"),
+        "dom_type":      data.get("dom_type"),
+        "renovation":    data.get("renovation"),
+    })
+    await cb.answer("✅ Obuna saqlandi! Yangi e'lonlar kelganda xabar beraman.", show_alert=True)
+
+
+# ── Favorites ────────────────────────────────────────────────────
+@router.message(F.text == "❤️ Sevimlilar")
+async def show_favorites(msg: Message, state: FSMContext):
+    favs = await db.get_favorites(msg.from_user.id)
+    if not favs:
+        await msg.answer(
+            "❤️ Sevimlilari yo'q.\n\n"
+            "E'lon ko'rayotganda <b>❤️ Saqlash</b> tugmasini bosing.",
+            parse_mode="HTML",
+        )
+        return
+
+    await msg.answer(f"❤️ <b>Sevimlilar ({len(favs)} ta):</b>", parse_mode="HTML")
+    for lst in favs[:10]:
+        loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else {}
+        text = listing_full_card(lst, loc)
+        markup = contact_kb(lst["id"])
+        if lst.get("video_file_id"):
+            await msg.answer_video(lst["video_file_id"], caption=text, reply_markup=markup, parse_mode="HTML")
+        else:
+            await msg.answer(text, reply_markup=markup, parse_mode="HTML")
+
+
+# ── Search history ───────────────────────────────────────────────
+@router.message(F.text == "📂 Qidiruv tarixi")
+async def show_history(msg: Message, state: FSMContext):
+    history = await db.get_search_history(msg.from_user.id, limit=10)
+    if not history:
+        await msg.answer("📂 Qidiruv tarixi bo'sh.")
+        return
+
+    from utils.helpers import PROPERTY_LABELS, RENOVATION_LABELS, DOM_TYPE_LABELS
+    lines = ["📂 <b>Oxirgi qidiruvlar:</b>\n"]
+    for i, h in enumerate(history, 1):
+        f = h.get("filters", {})
+        parts = []
+        if f.get("property_type"):
+            parts.append(PROPERTY_LABELS.get(f["property_type"], f["property_type"]))
+        if f.get("xonalar"):
+            parts.append(f"{f['xonalar']} xona")
+        if f.get("dom_type"):
+            parts.append(DOM_TYPE_LABELS.get(f["dom_type"], f["dom_type"]))
+        if f.get("renovation"):
+            parts.append(RENOVATION_LABELS.get(f["renovation"], f["renovation"]))
+        lines.append(f"{i}. {' · '.join(parts) or 'Umumiy qidiruv'}")
+
+    await msg.answer("\n".join(lines), parse_mode="HTML")

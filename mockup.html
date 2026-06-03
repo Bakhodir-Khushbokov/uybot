@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uy Bozori Bot — To'liq Mockup v2.2</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0e1621;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 30px 16px 80px;
+}
+
+h1 { color: #fff; text-align: center; font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -.3px; }
+.sub { color: #4a6a8a; text-align: center; font-size: 12px; margin-bottom: 36px; }
+
+/* ── Section header ── */
+.sec {
+  display: flex; align-items: center; gap: 10px;
+  margin: 48px 0 20px; color: #2ea6ff;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;
+}
+.sec::before, .sec::after { content: ''; flex: 1; height: 1px; background: #1a2e3f; }
+
+/* ── Row ── */
+.row { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; align-items: flex-start; }
+
+/* ── Phone ── */
+.pw { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #3a5a7a; }
+.lbl.g { color: #4cd964; } .lbl.o { color: #ff9f43; }
+.lbl.r { color: #ff6b6b; } .lbl.p { color: #a29bfe; }
+.lbl.y { color: #ffd700; }
+
+.phone {
+  width: 264px;
+  background: #17212b;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  border: 1px solid #1e2d3d;
+}
+
+/* ── Header ── */
+.hd {
+  background: #1e2d3d; padding: 10px 13px;
+  display: flex; align-items: center; gap: 9px;
+  border-bottom: 1px solid #1a2838;
+}
+.av {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
+.av.main  { background: linear-gradient(135deg,#2ea6ff,#006ead); }
+.av.group { background: linear-gradient(135deg,#f39c12,#e67e22); }
+.av.admin { background: linear-gradient(135deg,#e74c3c,#c0392b); }
+.av.ai    { background: linear-gradient(135deg,#9b59b6,#6c3483); }
+.av.note  { background: linear-gradient(135deg,#27ae60,#1e8449); }
+.hn { color: #fff; font-size: 13px; font-weight: 600; line-height: 1.2; }
+.hs { font-size: 10px; }
+.hs.on { color: #4cd964; }
+.hs.mem { color: #7a8fa8; }
+.nd { margin-left: auto; background: #e74c3c; color: #fff; border-radius: 9px; font-size: 9px; padding: 1px 5px; flex-shrink: 0; font-weight: 700; }
+
+/* ── Chat ── */
+.chat { padding: 9px 8px; display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Messages ── */
+.b, .u, .sys {
+  padding: 7px 9px; border-radius: 11px;
+  font-size: 12px; line-height: 1.55;
+}
+.b   { background: #1e2d3d; color: #d4e2f0; align-self: flex-start; border-bottom-left-radius: 3px; max-width: 92%; }
+.u   { background: #2b5278; color: #e8f4ff; align-self: flex-end;   border-bottom-right-radius: 3px; max-width: 88%; text-align: right; }
+.sys { background: #141e27; color: #4a6a8a; align-self: center; font-size: 10px; text-align: center; border-radius: 8px; padding: 4px 10px; }
+.ts  { font-size: 10px; opacity: .45; text-align: right; margin-top: 2px; }
+.step { font-size: 10px; color: #2ea6ff; font-weight: 700; margin-bottom: 3px; }
+em   { font-style: italic; color: #7a9ab8; }
+strong { font-weight: 700; }
+
+/* ── Inline keyboard ── */
+.k { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.kr { display: flex; gap: 3px; }
+.ki {
+  flex: 1; background: #253545; color: #7ec8e3;
+  border-radius: 6px; padding: 6px 5px; font-size: 11px;
+  text-align: center; font-weight: 500; line-height: 1.3; min-width: 0;
+}
+.ki.W   { width: 100%; flex: none; }
+.ki.G   { background: #1a3d22; color: #4cd964; }
+.ki.R   { background: #3d1a1a; color: #ff7070; }
+.ki.Y   { background: #3d3010; color: #ffd700; }
+.ki.P   { background: #2d1f45; color: #c8a0ff; }
+.ki.gr  { background: #1e2a35; color: #4a6a8a; }
+.ki.on  { background: #1a4a2a; color: #4cd964; border: 1px solid #2a7a3a; }
+.ki.blu { background: #1a2f4a; color: #5ac8ff; }
+
+/* ── Reply kb ── */
+.rk { background: #151f29; padding: 7px 7px; border-top: 1px solid #1a2838; display: flex; flex-direction: column; gap: 5px; }
+.rr { display: flex; gap: 5px; }
+.rb { flex: 1; background: #1e2d3d; color: #c5d5e5; border-radius: 9px; padding: 8px 5px; font-size: 11.5px; text-align: center; }
+.rb.X { background: #2d1717; color: #ff8888; }
+.rb.L { background: #172d1f; color: #4cd964; font-weight: 600; }
+.rb.V { background: #1f172d; color: #b8a0ff; }
+
+/* ── Input ── */
+.inp { background: #1e2d3d; padding: 6px 9px; display: flex; align-items: center; gap: 6px; border-top: 1px solid #1a2838; }
+.if  { flex: 1; background: #1a2838; border-radius: 16px; padding: 5px 11px; color: #4a6a8a; font-size: 11.5px; }
+.is  { width: 28px; height: 28px; border-radius: 50%; background: #2ea6ff; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+
+/* ── Map ── */
+.mp { border-radius: 9px; overflow: hidden; margin: 5px 0 2px; }
+.mg {
+  width: 100%; height: 90px;
+  background: linear-gradient(160deg,#0d1f14,#0d2a1a);
+  position: relative; display: flex; align-items: center; justify-content: center;
+}
+.mg svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .3; }
+.pin { font-size: 26px; position: relative; z-index: 2; filter: drop-shadow(0 2px 8px #0008); }
+.mi { padding: 5px 8px; font-size: 10.5px; color: #5a7a9a; background: #141e27; }
+
+/* ── Audio ── */
+.am {
+  background: #1a2838; border-radius: 9px; padding: 7px 9px;
+  display: flex; align-items: center; gap: 7px; margin: 3px 0;
+}
+.ap { width: 28px; height: 28px; border-radius: 50%; background: #2ea6ff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.aw { flex: 1; display: flex; align-items: center; gap: 2px; height: 16px; }
+.aw span { display: inline-block; background: #3a6a8a; border-radius: 2px; width: 2.5px; }
+.ad { font-size: 10px; color: #4a6a8a; }
+
+/* ── Video card ── */
+.vc { border-radius: 9px; overflow: hidden; margin: 3px 0; }
+.vt { width: 100%; height: 95px; background: linear-gradient(135deg,#0d1a2e,#0d2a3a); display: flex; align-items: center; justify-content: center; font-size: 28px; position: relative; }
+.vp { position: absolute; width: 36px; height: 36px; border-radius: 50%; background: rgba(46,166,255,.82); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.vi { padding: 5px 8px; font-size: 10.5px; color: #5a7a9a; background: #141e27; }
+
+/* ── Progress ── */
+.pb { height: 3px; background: #1a2838; border-radius: 3px; overflow: hidden; margin: 5px 0 2px; }
+.pf { height: 100%; background: #2ea6ff; border-radius: 3px; }
+
+/* ── Separators / badges ── */
+.sep { border: none; border-top: 1px solid #1a2838; margin: 5px 0; }
+.div { text-align: center; color: #253545; font-size: 10px; padding: 1px 0; }
+.badge { display: inline-block; border-radius: 9px; font-size: 9px; padding: 1px 5px; font-weight: 700; }
+.badge.bl { background: #2ea6ff; color: #fff; }
+.badge.gr { background: #27ae60; color: #fff; }
+.badge.re { background: #e74c3c; color: #fff; }
+.badge.go { background: #f39c12; color: #fff; }
+.badge.pr { background: #8e44ad; color: #fff; }
+
+/* ── Stat row ── */
+.sr { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: #c5d5e5; padding: 3px 0; border-bottom: 1px solid #1a2838; }
+.sr:last-child { border-bottom: none; }
+.sv { color: #2ea6ff; font-weight: 700; }
+.sv.g { color: #4cd964; }
+.sv.r { color: #ff7070; }
+.sv.y { color: #ffd700; }
+
+/* ── E'lon card (Format 1) ── */
+.card { background: #141e27; border-radius: 10px; padding: 9px 10px; margin: 3px 0; }
+.card-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+.card-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.tag { background: #1e2d3d; color: #7ec8e3; border-radius: 5px; padding: 2px 6px; font-size: 10.5px; }
+.tag.g { background: #1a3d22; color: #4cd964; }
+.tag.o { background: #3d2a10; color: #ff9f43; }
+.card-price { font-size: 15px; font-weight: 800; color: #fff; margin: 6px 0 3px; }
+.card-phone { font-size: 11.5px; color: #5a7a9a; }
+
+/* ── Short list row ── */
+.srow { background: #141e27; border-radius: 8px; padding: 7px 9px; margin: 2px 0; display: flex; align-items: center; gap: 7px; }
+.srow-txt { flex: 1; font-size: 11px; color: #c5d5e5; line-height: 1.4; min-width: 0; }
+.srow-btn { background: #253545; color: #7ec8e3; border-radius: 6px; padding: 5px 8px; font-size: 11px; flex-shrink: 0; }
+
+/* ── Channel post ── */
+.ch-post { background: #141e27; border-radius: 10px; overflow: hidden; margin: 3px 0; }
+.ch-post .vt { height: 80px; font-size: 22px; }
+.ch-body { padding: 7px 9px; }
+.ch-meta { font-size: 11.5px; color: #c5d5e5; line-height: 1.6; }
+.ch-price { font-size: 14px; font-weight: 800; color: #fff; margin: 4px 0; }
+.ch-link { color: #2ea6ff; font-size: 11px; }
+
+/* ── Topic header ── */
+.topic-hdr { background: #1a2838; border-radius: 8px; padding: 6px 9px; margin: 3px 0; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #7ec8e3; }
+.topic-hdr .pin { font-size: 14px; }
+
+/* ── Sold overlay ── */
+.sold-overlay { position: relative; }
+.sold-badge-big { position: absolute; top: 30px; left: 50%; transform: translateX(-50%) rotate(-8deg); background: rgba(39,174,96,.9); color: #fff; font-size: 14px; font-weight: 800; padding: 4px 14px; border-radius: 6px; white-space: nowrap; z-index: 3; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<h1>🏠 Uy Bozori Bot</h1>
+<p class="sub">Vizual mockup · TZ v2.2 · Barcha oqimlar · 40 ta ekran</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">🚀 Kirish oqimi — 3 ta ekran</div>
+<div class="row">
+
+  <div class="pw"><div class="lbl">1 · /start</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">Assalomu alaykum! 👋<br><strong>Uy Bozori</strong> botiga xush kelibsiz!<br><br>Здравствуйте! 👋<br>Добро пожаловать в <strong>Uy Bozori</strong>!<div class="ts">09:00</div></div>
+      <div class="b">🌐 Tilni tanlang:<div class="k"><div class="kr"><div class="ki W">🇺🇿 O'zbek (Lotin)</div></div><div class="kr"><div class="ki W">🇺🇿 Ўзбек (Кирилл)</div></div><div class="kr"><div class="ki W">🇷🇺 Русский</div></div></div><div class="ts">09:00</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">2 · Telefon raqam</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">🇺🇿 O'zbek (Lotin) ✓<div class="ts">09:00</div></div>
+      <div class="am"><div class="ap">▶</div><div class="aw"><span style="height:5px"></span><span style="height:11px"></span><span style="height:7px"></span><span style="height:14px"></span><span style="height:9px"></span><span style="height:13px"></span><span style="height:6px"></span><span style="height:10px"></span></div><div class="ad">0:04</div></div>
+      <div class="b">📱 Telefon raqamingizni yuboring.<br><em>Quyidagi tugmani bosing — bot avtomatik oladi.</em><div class="k"><div class="kr"><div class="ki W">📲 Raqamimni yuborish</div></div><div class="kr"><div class="ki W gr">❓ Yordam</div></div></div><div class="ts">09:00</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">3 · Rol tanlash</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">📲 +998 90 123 45 67 ✓<div class="ts">09:01</div></div>
+      <div class="b">✅ Raqam saqlandi!<br><br>Siz kim sifatida keldingiz?<div class="k"><div class="kr"><div class="ki W">🏷 Men sotaman</div></div><div class="kr"><div class="ki W">🔍 Men qidiraman</div></div><div class="kr"><div class="ki W">👔 Men maklerman</div></div><div class="kr"><div class="ki W">🏗 Men quruvchiman</div></div><div class="kr"><div class="ki W gr">❓ Maslahat olaman</div></div></div><div class="ts">09:01</div></div>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">🏷 Sotuvchi oqimi — E'lon yaratish</div>
+<div class="row">
+
+  <div class="pw"><div class="lbl">4 · Mulk turi · 1/6</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">🏷 Men sotaman<div class="ts">09:02</div></div>
+      <div class="am"><div class="ap">▶</div><div class="aw"><span style="height:6px"></span><span style="height:12px"></span><span style="height:8px"></span><span style="height:15px"></span><span style="height:10px"></span><span style="height:13px"></span><span style="height:7px"></span></div><div class="ad">0:03</div></div>
+      <div class="b"><div class="step">Qadam 1 / 6</div>Nima sotmoqchisiz?<div class="k"><div class="kr"><div class="ki">🏡 Hovli</div><div class="ki">🏢 Kvartira</div></div><div class="kr"><div class="ki">🏬 Ofis</div><div class="ki">🌿 Yer</div></div><div class="kr"><div class="ki gr">❓ Yordam</div></div></div><div class="ts">09:02</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">5 · Dom turi · 1.1</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">🏢 Kvartira ✓<div class="ts">09:02</div></div>
+      <div class="b"><div class="step">Qadam 1.1</div>Dom qanday?<div class="k"><div class="kr"><div class="ki W">🏢 Novostroyka (Yangi qurilish)</div></div><div class="kr"><div class="ki W">🏚 Eski dom</div></div><div class="kr"><div class="ki gr">❓ Yordam</div><div class="ki gr">⬅️ Ortga</div></div></div><div class="ts">09:02</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">6 · Viloyat · 2/6</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="am"><div class="ap">▶</div><div class="aw"><span style="height:8px"></span><span style="height:14px"></span><span style="height:10px"></span><span style="height:16px"></span><span style="height:11px"></span><span style="height:13px"></span></div><div class="ad">0:05</div></div>
+      <div class="b"><div class="step">Qadam 2 / 6</div>📍 Viloyatni tanlang:<div class="k"><div class="kr"><div class="ki">Toshkent sh.</div><div class="ki">Toshkent vil.</div></div><div class="kr"><div class="ki">Samarqand</div><div class="ki">Farg'ona</div></div><div class="kr"><div class="ki">Namangan</div><div class="ki">Andijon</div></div><div class="kr"><div class="ki">Buxoro</div><div class="ki">⬇️ Ko'proq</div></div><div class="kr"><div class="ki gr">🔍 Qidirish</div><div class="ki gr">❓</div><div class="ki gr">⬅️</div></div></div><div class="ts">09:03</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">7 · Mahalla qidiruv</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">Toshkent sh. → Yunusobod<div class="ts">09:03</div></div>
+      <div class="b">🔍 Mahalla nomini yozing:<div class="ts">09:03</div></div>
+      <div class="u">yunu<div class="ts">09:03</div></div>
+      <div class="b">Mahallani tanlang:<div class="k"><div class="kr"><div class="ki W">Yunusobod 1-mahalla</div></div><div class="kr"><div class="ki W">Yunusobod 3-mahalla</div></div><div class="kr"><div class="ki W">Yunusobod 17-mahalla</div></div><div class="kr"><div class="ki W">Yunusobod 19-mavze</div></div><div class="kr"><div class="ki gr">⬅️ Ortga</div></div></div><div class="ts">09:03</div></div>
+    </div>
+    <div class="inp"><div class="if">Qidirish...</div><div class="is">🔍</div></div>
+  </div></div>
+
+  <div class="pw"><div class="lbl g">8 · Dom → Xarita pin</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">Yunusobod 19-mavze ✓<div class="ts">09:04</div></div>
+      <div class="b">Dom raqamini yozing:<br><em>Masalan: 14-A yoki Navruz 22</em><div class="k"><div class="kr"><div class="ki V">🎙 Ovozli</div><div class="ki gr">❓</div><div class="ki gr">⬅️</div></div></div><div class="ts">09:04</div></div>
+      <div class="u">14-A<div class="ts">09:04</div></div>
+      <div class="b">✅ Bazada topildi: <strong>14-A dom</strong><br>Joylashuvni tekshiring 👇<div class="ts">09:04</div></div>
+      <div class="mp"><div class="mg"><svg viewBox="0 0 264 90"><line x1="0" y1="38" x2="264" y2="38" stroke="#2ea6ff" stroke-width="2"/><line x1="0" y1="62" x2="264" y2="62" stroke="#1a4a2a" stroke-width="1"/><line x1="88" y1="0" x2="88" y2="90" stroke="#2ea6ff" stroke-width="2"/><line x1="176" y1="0" x2="176" y2="90" stroke="#1a4a2a" stroke-width="1"/><rect x="30" y="42" width="28" height="17" rx="2" fill="#1a3a28" opacity=".7"/><rect x="100" y="15" width="20" height="15" rx="2" fill="#1a3a28" opacity=".7"/><rect x="130" y="64" width="22" height="13" rx="2" fill="#1a3a28" opacity=".7"/></svg><div class="pin">📍</div></div><div class="mi">📍 41.3401, 69.3592 · Yunusobod 19-mavze</div></div>
+      <div class="b">Shu to'g'ri joymiZ?<div class="k"><div class="kr"><div class="ki G">✅ Ha, to'g'ri</div><div class="ki R">❌ Yo'q, boshqa</div></div></div><div class="ts">09:04</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">9 · Video · 3/6</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="am"><div class="ap">▶</div><div class="aw"><span style="height:9px"></span><span style="height:15px"></span><span style="height:11px"></span><span style="height:17px"></span><span style="height:12px"></span><span style="height:14px"></span><span style="height:8px"></span><span style="height:13px"></span></div><div class="ad">0:08</div></div>
+      <div class="b"><div class="step">Qadam 3 / 6</div>📹 3 daqiqalik obzor videoni yuboring.<br><br><em>Telefonni yotig'icha tuting — uy kengroq ko'rinadi.</em><br><br>Video tekshiriladi (~2-5 daqiqa).<div class="k"><div class="kr"><div class="ki V">🎙 Ovozli aytish</div><div class="ki gr">❓</div><div class="ki gr">⬅️</div></div></div><div class="ts">09:05</div></div>
+    </div>
+    <div class="rk"><div class="rr"><div class="rb X">❌ Bekor qilish</div></div></div>
+  </div></div>
+
+  <div class="pw"><div class="lbl o">10 · AI tekshirilmoqda</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="vc"><div class="vt">🏢<div class="vp">▶</div></div><div class="vi">📹 2:47 · Yunusobod, Kvartira</div></div>
+      <div class="b">⏳ Video tekshirilmoqda...<br>Biroz kuting.<div class="pb"><div class="pf" style="width:55%"></div></div><em>1-qatlam (AssemblyAI): ✅ · 2-qatlam (Sightengine): ⏳</em><div class="ts">09:06</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl r">11 · Video rad etildi</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">❌ Video qabul qilinmadi.<br><br><strong>Sabab:</strong> Taqiqlangan so'z aniqlandi (<code>CREDIT_OFFER</code>).<br><br>Faqat mulk haqida gapiradigan yangi video yuboring.<div class="k"><div class="kr"><div class="ki R W">🔄 Qayta yuborish</div></div><div class="kr"><div class="ki gr W">❓ Yordam</div></div></div><div class="ts">09:08</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl o">12 · Shovqin ogohlantirish</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">⚠️ Videoda shovqin ko'p (fon ovozi).<br><br>Iloji bo'lsa, tinchroq joyda qayta oling.<div class="k"><div class="kr"><div class="ki G">✅ Shu videoni qoldirish</div></div><div class="kr"><div class="ki R">🔄 Qayta yuborish</div></div></div><div class="ts">09:07</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">13 · Ma'lumotlar · 4/6</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="am"><div class="ap">▶</div><div class="aw"><span style="height:7px"></span><span style="height:12px"></span><span style="height:9px"></span><span style="height:14px"></span><span style="height:8px"></span><span style="height:11px"></span></div><div class="ad">0:04</div></div>
+      <div class="b"><div class="step">Qadam 4 / 6</div>Nechta xona?<div class="k"><div class="kr"><div class="ki">1</div><div class="ki">2</div><div class="ki on">3</div><div class="ki">4</div><div class="ki">4+</div></div><div class="kr"><div class="ki gr">❓ Yordam</div></div></div><div class="ts">09:09</div></div>
+      <div class="b">Nechanchi qavat?<div class="k"><div class="kr"><div class="ki V">🎙 Ovozli</div><div class="ki gr">❓</div></div></div></div>
+      <div class="u">5<div class="ts">09:09</div></div>
+      <div class="b">Bino necha qavatli?</div>
+      <div class="u">9<div class="ts">09:10</div></div>
+    </div>
+    <div class="inp"><div class="if">Raqam kiriting...</div><div class="is">➤</div></div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">14 · Remont turi (yangi)</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">Remont turi?<div class="k"><div class="kr"><div class="ki W">✨ Evro</div></div><div class="kr"><div class="ki W">🏠 O'rta</div></div><div class="kr"><div class="ki W">🪣 Qora (ta'mirsiz)</div></div><div class="kr"><div class="ki W">🆕 Muallim (yangi qurilish)</div></div><div class="kr"><div class="ki gr">❓</div><div class="ki gr">⬅️</div></div></div><div class="ts">09:10</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">15 · Oriëntir (yangi)</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">✨ Evro ✓<div class="ts">09:10</div></div>
+      <div class="b">Oriëntir (ixtiyoriy):<br><em>Yaqin yerda nima bor?</em><br>Masalan: <em>Korzinka</em>, <em>Maktab</em>, <em>Metro</em><div class="k"><div class="kr"><div class="ki V">🎙 Ovozli</div><div class="ki gr">➡️ O'tkazib yuborish</div></div></div><div class="ts">09:11</div></div>
+      <div class="u">Korzinka yaqini<div class="ts">09:11</div></div>
+      <div class="b">Narx:<div class="k"><div class="kr"><div class="ki">💵 Dollar</div><div class="ki">🇺🇿 So'm</div></div></div></div>
+      <div class="u">💵 Dollar ✓<div class="ts">09:11</div></div>
+      <div class="b">Narxni kiriting:<br><em>47.500</em> → bot <strong>47.500$</strong> ko'rsatadi<div class="k"><div class="kr"><div class="ki V">🎙 Ovozli</div><div class="ki gr">❓</div></div></div></div>
+    </div>
+    <div class="inp"><div class="if">49.000</div><div class="is">➤</div></div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">16 · Ko'rib chiqish · 5/6</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b"><div class="step">Qadam 5 / 6</div>📋 <strong>E'loningiz:</strong><br><br>🏢 Kvartira · Novostroyka<br>📍 Yunusobod, 19-mavze<br>📌 Korzinka yaqini<br>🛏 3 xona · 🏗 5/9 · 📐 72 m²<br>✨ Evro ta'mir<br>🏠 Dom: 14-A<br>💰 <strong>49.000$</strong><div class="mp"><div class="mg" style="height:60px"><svg viewBox="0 0 264 60"><line x1="0" y1="28" x2="264" y2="28" stroke="#2ea6ff" stroke-width="2"/><line x1="88" y1="0" x2="88" y2="60" stroke="#2ea6ff" stroke-width="1.5"/></svg><div class="pin" style="font-size:20px">📍</div></div></div><div class="k"><div class="kr"><div class="ki G W">✅ Nashr qilish</div></div><div class="kr"><div class="ki">✏️ Tahrirlash</div><div class="ki gr">⬅️ Ortga</div></div></div><div class="ts">09:12</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl g">17 · E'lon joylandi · 6/6</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b"><div class="step">Qadam 6 / 6</div>✅ <strong>E'loningiz joylandi!</strong><br><br>Biz uni tekshirib chiqamiz — 5 daqiqada kanalga chiqadi.<div class="k"><div class="kr"><div class="ki W">📋 E'lonlarimni ko'rish</div></div><div class="kr"><div class="ki W">➕ Yana e'lon joylash</div></div></div><div class="ts">09:13</div></div>
+      <div class="sys">─── 24 soatdan keyin ───</div>
+      <div class="b">📊 Sizning e'loningiz (24 soat):<br><br><div class="sr"><span>👁 Ko'rishlar</span><span class="sv">50</span></div><div class="sr"><span>📞 Raqam ochilgan</span><span class="sv">8</span></div><div class="k"><div class="kr"><div class="ki Y">🔝 Topga chiqarish</div></div><div class="kr"><div class="ki">✏️ Tahrirlash</div><div class="ki">📉 Narx tushirish</div></div></div><div class="ts">09:13</div></div>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">📋 E'lon ko'rinish formatlari — yangi v2.2</div>
+<div class="row">
+
+  <!-- FORMAT 1: To'liq karta -->
+  <div class="pw"><div class="lbl g">18 · Format 1 — To'liq karta</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="sys">E'lon #42 ochildi</div>
+      <div class="vc"><div class="vt">🏢<div class="vp">▶</div></div><div class="vi">📹 2:47 · Yunusobod 19-mavze</div></div>
+      <div class="card">
+        <div class="card-title">🏢 Kvartira · <span class="badge bl">Novostroyka</span></div>
+        <div style="font-size:11.5px;color:#7ec8e3;margin-bottom:5px">📍 Yunusobod, 19-mavze · <em>Korzinka yaqini</em></div>
+        <div class="card-row">
+          <div class="tag">🛏 3 xona</div>
+          <div class="tag">🏗 5/9 qavat</div>
+          <div class="tag">📐 72 m²</div>
+          <div class="tag g">✨ Evro</div>
+        </div>
+        <div class="card-price">49.000$</div>
+        <div class="card-phone">📞 +998 90 *** ** 12</div>
+        <div class="k" style="margin-top:7px"><div class="kr"><div class="ki">📹 Video</div><div class="ki">📍 Lokatsiya</div></div><div class="kr"><div class="ki G">📞 Raqamni ko'rish</div></div><div class="kr"><div class="ki">❤️ Saqlash</div><div class="ki gr">🚩 Shikoyat</div></div></div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- FORMAT 2: Qisqa ro'yxat -->
+  <div class="pw"><div class="lbl">19 · Format 2 — Qisqa ro'yxat</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b" style="font-size:11.5px;padding:5px 8px"><strong>📍 Yunusobod 19-mavze — 12 ta e'lon</strong></div>
+      <div class="sys">──────────────────</div>
+      <div class="srow"><div class="srow-txt">🏢 <strong>Korzinka</strong> · 1x · 4/5 · 45m² · evro · <strong>49.000$</strong></div><div class="srow-btn">👁</div></div>
+      <div class="srow"><div class="srow-txt">🏢 <strong>Avtoturar</strong> · 2x · 3/9 · 68m² · o'rta · <strong>72.000$</strong></div><div class="srow-btn">👁</div></div>
+      <div class="srow"><div class="srow-txt">🏢 3x · 7/12 · 95m² · muallim · <strong>110.000$</strong></div><div class="srow-btn">👁</div></div>
+      <div class="srow"><div class="srow-txt">🏡 Hovli · 6x · 280m² · <strong>195.000$</strong></div><div class="srow-btn">👁</div></div>
+      <div class="srow"><div class="srow-txt">🌿 Yer · 8 sotix · qurilish · <strong>38.000$</strong></div><div class="srow-btn">👁</div></div>
+      <div class="sys">──────────────────</div>
+      <div class="b" style="text-align:center"><div class="k"><div class="kr"><div class="ki W">⬇️ Ko'proq (7 ta qoldi)</div></div></div></div>
+    </div>
+  </div></div>
+
+  <!-- FORMAT 3: Guruh/Kanal post -->
+  <div class="pw"><div class="lbl p">20 · Format 3 — Guruh/Kanal post</div><div class="phone">
+    <div class="hd"><div class="av group">🦁</div><div><div class="hn">Panda-Yunusobod</div><div class="hs mem">📌 19-mavze (topic)</div></div></div>
+    <div class="chat">
+      <div class="topic-hdr"><span class="pin">📌</span><strong>19-mavze</strong> · 12 ta e'lon · yangilangan 09:13</div>
+      <div class="ch-post">
+        <div class="vt">🏢<div class="vp">▶</div></div>
+        <div class="ch-body">
+          <div class="ch-meta">🏢 <strong>Korzinka</strong> · 1x · 4/5 · 45m² · evro</div>
+          <div class="ch-price">49.000$</div>
+          <div class="ch-meta">📍 Yunusobod, 19-mavze</div>
+          <div style="margin-top:5px"><div class="ki blu" style="display:inline-block;padding:4px 8px">🔗 @PandaBot da to'liq ko'rish</div></div>
+        </div>
+      </div>
+      <div class="ch-post" style="margin-top:4px">
+        <div class="vt">🏢<div class="vp">▶</div></div>
+        <div class="ch-body">
+          <div class="ch-meta">🏢 <strong>Avtoturar</strong> · 2x · 3/9 · 68m² · o'rta</div>
+          <div class="ch-price">72.000$</div>
+          <div style="margin-top:5px"><div class="ki blu" style="display:inline-block;padding:4px 8px">🔗 @PandaBot da to'liq ko'rish</div></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">🔄 Sotildi / O'chirish oqimi — Sync Engine</div>
+<div class="row">
+
+  <div class="pw"><div class="lbl">21 · Sotuvchi kabineti</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">📋 <strong>Mening e'lonlarim:</strong><br><br><div class="sr"><span>Faol e'lonlar</span><span class="sv">3 ta</span></div><div class="sr"><span>Jami ko'rishlar (oy)</span><span class="sv">340</span></div></div>
+      <div class="vc"><div class="vt">🏢<div class="vp">▶</div></div><div class="vi">📹 2:47 · #42 · Yunusobod · 49.000$</div></div>
+      <div class="b" style="margin-top:2px;font-size:11px"><div class="sr"><span>👁 Ko'rishlar</span><span class="sv">120</span></div><div class="sr"><span>📞 Raqam ochilgan</span><span class="sv">15</span></div><div class="k" style="margin-top:5px"><div class="kr"><div class="ki G">✅ Sotildi</div><div class="ki R">🗑 O'chirish</div></div><div class="kr"><div class="ki">✏️ Tahrirlash</div><div class="ki">📉 Narx</div></div></div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl g">22 · "Sotildi" → guruhda</div><div class="phone">
+    <div class="hd"><div class="av group">🦁</div><div><div class="hn">Panda-Yunusobod</div><div class="hs mem">📌 19-mavze</div></div></div>
+    <div class="chat">
+      <div class="sold-overlay">
+        <div class="ch-post">
+          <div class="vt">🏢<div class="vp">▶</div></div>
+          <div class="ch-body">
+            <div class="ch-meta">🏢 Korzinka · 1x · 4/5 · 45m² · evro</div>
+            <div class="ch-price" style="text-decoration:line-through;color:#5a7a9a">49.000$</div>
+          </div>
+        </div>
+        <div class="sold-badge-big">✅ SOTILDI</div>
+      </div>
+      <div class="sys">24 soatdan keyin avtomatik o'chiriladi</div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl g">23 · Sotildi → tabriklash</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">🎉 <strong>Tabriklaymiz! Uyingiz sotildi.</strong><br><br>📊 E'lon natijasi:<br><div class="sr"><span>👁 Jami ko'rishlar</span><span class="sv">340</span></div><div class="sr"><span>📞 Raqam ochilgan</span><span class="sv">28 marta</span></div><div class="sr"><span>⏱ Vaqt</span><span class="sv">12 kun</span></div><br><div class="k"><div class="kr"><div class="ki W">➕ Yangi e'lon joylash</div></div></div><div class="ts">14:20</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl o">24 · Narx tushirish</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">📉 Yangi narxni kiriting:<br><em>Hozirgi narx: 100.000$</em><div class="k"><div class="kr"><div class="ki V">🎙 Ovozli</div><div class="ki gr">⬅️</div></div></div></div>
+      <div class="u">92.000<div class="ts">15:00</div></div>
+      <div class="b">✅ <strong>Narx yangilandi:</strong><br>100.000$ → <strong>92.000$</strong><br><br>Sizning uyingizni <strong>23 ta odam</strong> kuzatmoqda — ularga xabar yuborildi!<div class="ts">15:00</div></div>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">🔍 Xaridor oqimi</div>
+<div class="row">
+
+  <div class="pw"><div class="lbl">25 · Qidiruv · 1/4</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="u">🔍 Men qidiraman<div class="ts">10:00</div></div>
+      <div class="b"><div class="step">Qadam 1 / 4</div>Nima qidiryapsiz?<div class="k"><div class="kr"><div class="ki">🏡 Hovli</div><div class="ki">🏢 Kvartira</div></div><div class="kr"><div class="ki">🏬 Ofis</div><div class="ki">🌿 Yer</div></div><div class="kr"><div class="ki gr">❓ Yordam</div></div></div><div class="ts">10:00</div></div>
+      <div class="u">🏢 Kvartira ✓<div class="ts">10:00</div></div>
+      <div class="b"><div class="step">Qadam 2 / 4</div>Qaysi hududdan?<div class="k"><div class="kr"><div class="ki W">🌍 Barcha hududlar</div></div><div class="kr"><div class="ki W">📍 Aniq joy tanlash</div></div><div class="kr"><div class="ki W gr">🔍 Qidirish</div></div></div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">26 · Filtrlar · 3/4</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b"><div class="step">Qadam 3 / 4</div>Nechta xona?<div class="k"><div class="kr"><div class="ki">1</div><div class="ki on">2</div><div class="ki on">3</div><div class="ki">4+</div></div><div class="kr"><div class="ki G W">✅ Farqi yo'q</div></div></div><div class="ts">10:01</div></div>
+      <div class="b">Dom turi:<div class="k"><div class="kr"><div class="ki on">🏢 Novostroyka</div><div class="ki">🏚 Eski</div></div><div class="kr"><div class="ki G W">✅ Farqi yo'q</div></div></div></div>
+      <div class="b">Remont turi:<div class="k"><div class="kr"><div class="ki on">✨ Evro</div><div class="ki">🏠 O'rta</div></div><div class="kr"><div class="ki">🪣 Qora</div><div class="ki">🆕 Muallim</div></div><div class="kr"><div class="ki G W">✅ Farqi yo'q</div></div><div class="kr"><div class="ki gr">❓</div><div class="ki gr">⬅️</div></div></div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl g">27 · Natijalar · 4/4</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b" style="font-size:11px"><strong>📍 Yunusobod, 19-mavze — 3 ta e'lon</strong></div>
+      <div class="sys">──────────────</div>
+      <div class="b" style="font-size:11.5px">🏢 Kvartira · <span class="badge bl">Novo</span> · 3x · 5/9 · 72m² · ✨evro<br>💰 <strong>49.000$</strong><br>📞 +998 90 *** ** 12<div class="k"><div class="kr"><div class="ki">📹 Video</div><div class="ki G">📞 Ko'rish</div></div><div class="kr"><div class="ki">📍 Lokatsiya</div><div class="ki">❤️ Saqlash</div></div></div><div class="ts">10:02</div></div>
+      <div class="b" style="font-size:11.5px">🏢 Kvartira · Eski · 2x · 3/5 · 54m² · 🏠o'rta<br>💰 <strong>52.000$</strong><br>📞 +998 91 *** ** 78<div class="k"><div class="kr"><div class="ki">📹 Video</div><div class="ki G">📞 Ko'rish</div></div><div class="kr"><div class="ki">📍 Lokatsiya</div><div class="ki gr">❤️ Saqlash</div></div></div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl p">28 · Ovozli qidiruv (AI)</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="am" style="align-self:flex-end;background:#2b5278;max-width:85%"><div class="ap">▶</div><div class="aw"><span style="height:8px"></span><span style="height:14px"></span><span style="height:10px"></span><span style="height:16px"></span><span style="height:11px"></span><span style="height:13px"></span><span style="height:9px"></span></div><div class="ad">0:05</div></div>
+      <div class="b">🎙 <em>Whisper aniqladi:</em><br><span style="color:#5ac8ff">"Yunusoboddagi 3 xonali kvartira qidiryapman"</span><br><br>Siz shuni qidirmoqchisizmi?<br>📍 Yunusobod · 3 xona · Kvartira<div class="k"><div class="kr"><div class="ki G">✅ Ha, qidiring</div><div class="ki">✏️ O'zgartirish</div></div></div><div class="ts">10:10</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl o">29 · 📉 Price Drop Alert</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div><div class="nd">!</div></div>
+    <div class="chat">
+      <div class="b">📉 <strong>Siz saqlagan uy arzonlashdi!</strong><br><br>🏢 Yunusobod · 3 xona · Novostroyka<br><br><div class="sr"><span>Oldingi narx</span><span style="color:#ff7070;text-decoration:line-through">100.000$</span></div><div class="sr"><span>Yangi narx</span><span class="sv g">92.000$</span></div><div class="k" style="margin-top:5px"><div class="kr"><div class="ki W">📹 Videoni ko'rish</div></div><div class="kr"><div class="ki G W">📞 Raqamni ko'rish</div></div></div><div class="ts">14:35</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">30 · ❤️ Sevimlilar</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">❤️ <strong>Sevimlilarim</strong> <span class="badge bl">12</span><br><br>🏢 Yunusobod · 3x · evro · <strong>49.000$</strong><div class="k"><div class="kr"><div class="ki">👁 Ko'rish</div><div class="ki R">🗑 O'chirish</div></div></div><hr class="sep">🏡 Chilonzor · Hovli · <strong>350 mln</strong><div class="k"><div class="kr"><div class="ki">👁 Ko'rish</div><div class="ki R">🗑 O'chirish</div></div></div><hr class="sep">🏢 Mirzo Ulug'bek · 2x · <strong>67.500$</strong><div class="k"><div class="kr"><div class="ki">👁 Ko'rish</div><div class="ki R">🗑 O'chirish</div></div></div><div class="ts">10:15</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">31 · 📂 Qidiruv tarixi</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">📂 <strong>Qidiruv tarixingiz:</strong><br><em>Bosing — qayta ishga tushiradi</em><div class="k"><div class="kr"><div class="ki W">1. Yunusobod · 3x · Novostroyka <span style="color:#3a5a7a">kecha</span></div></div><div class="kr"><div class="ki W">2. Chilonzor · 2x · Eski <span style="color:#3a5a7a">3 kun</span></div></div><div class="kr"><div class="ki W">3. Mirzo Ulug'bek · Hovli <span style="color:#3a5a7a">hafta</span></div></div><div class="kr"><div class="ki W">4. Barcha · 4x · Dollar <span style="color:#3a5a7a">2 hafta</span></div></div></div><div class="ts">10:20</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl">32 · 🔔 Obuna</div><div class="phone">
+    <div class="hd"><div class="av main">🏠</div><div><div class="hn">Uy Bozori</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">🔔 Shu filtrlarga mos yangi e'lon qo'yilganda xabar beraymi?<br><br>📍 Yunusobod · 2-3 xona · Novo · evro<div class="k"><div class="kr"><div class="ki G">✅ Ha, xabar ber</div><div class="ki R">❌ Yo'q</div></div></div><div class="ts">10:03</div></div>
+      <div class="b">✅ Obuna yoqildi! 🔔<br>Yangi e'lon chiqqanda xabar olasiz.<div class="ts">10:03</div></div>
+    </div>
+    <div class="rk"><div class="rr"><div class="rb">🔍 Yangi qidiruv</div><div class="rb">📂 Tarixim</div></div><div class="rr"><div class="rb">❤️ Sevimlilarim</div><div class="rb">📞 Bog'langanlarim</div></div></div>
+  </div></div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">📡 Guruh tuzilmasi — Sync Engine v2.2</div>
+<div class="row">
+
+  <div class="pw"><div class="lbl p">33 · Guruh: Panda-Yunusobod</div><div class="phone">
+    <div class="hd"><div class="av group">🦁</div><div><div class="hn">Panda-Yunusobod</div><div class="hs mem">3,240 a'zo · Topics</div></div></div>
+    <div class="chat">
+      <div class="topic-hdr"><span>📌</span><strong>19-mavze</strong> · 12 ta e'lon</div>
+      <div class="topic-hdr"><span>📌</span><strong>1-kvartal</strong> · 8 ta e'lon</div>
+      <div class="topic-hdr"><span>📌</span><strong>2-kvartal</strong> · 5 ta e'lon</div>
+      <div class="topic-hdr"><span>📌</span><strong>17-mahalla</strong> · 3 ta e'lon</div>
+      <div class="topic-hdr"><span>📌</span><strong>Umumiy</strong> · Haftalik digest</div>
+      <div class="sys">Faqat bot yozadi · Anti-flood aktiv</div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl y">34 · Pinned post (topic)</div><div class="phone">
+    <div class="hd"><div class="av group">🦁</div><div><div class="hn">Panda-Yunusobod</div><div class="hs mem">📌 19-mavze</div></div></div>
+    <div class="chat">
+      <div class="b" style="border:1px solid #2a4a6a;background:#141e27">📌 <strong>19-mavze</strong><br><br>Hozir faol e'lonlar: <strong>12 ta</strong><br>So'nggi yangilanish: bugun 09:13<br><br><em>Yangi e'lon joylash uchun:</em><br><div class="ki blu" style="display:inline-block;padding:4px 8px;margin-top:3px">➡️ @PandaBot</div></div>
+      <div class="ch-post"><div class="vt">🏢<div class="vp">▶</div></div><div class="ch-body"><div class="ch-meta">🏢 <strong>Korzinka</strong> · 1x · 4/5 · 45m² · evro</div><div class="ch-price">49.000$</div><div class="ki blu" style="display:inline-block;padding:3px 7px;margin-top:3px;font-size:10.5px">🔗 @PandaBot da to'liq ko'rish</div></div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl y">35 · Haftalik digest</div><div class="phone">
+    <div class="hd"><div class="av group">🦁</div><div><div class="hn">Panda-Yunusobod</div><div class="hs mem">📌 Umumiy</div></div></div>
+    <div class="chat">
+      <div class="sys">Dushanba, 08:00</div>
+      <div class="b">📊 <strong>Yunusobod haftalik raqamlar:</strong><br><br><div class="sr"><span>🆕 Yangi e'lonlar</span><span class="sv">23</span></div><div class="sr"><span>✅ Sotildi</span><span class="sv g">8</span></div><div class="sr"><span>💰 O'rtacha narx</span><span class="sv">67.500$</span></div><div class="sr"><span>👁 Jami ko'rishlar</span><span class="sv">4,120</span></div><br><em>Bot tomonidan avtomatik yuborildi</em><div class="ts">08:00</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl r">36 · Anti-flood · spam blok</div><div class="phone">
+    <div class="hd"><div class="av group">🦁</div><div><div class="hn">Panda-Yunusobod</div><div class="hs mem">📌 19-mavze</div></div></div>
+    <div class="chat">
+      <div class="sys">Foydalanuvchi xabar yubordi</div>
+      <div class="b" style="background:#2d1717;color:#ff8888">🚫 Bu guruhda yozishga ruxsat yo'q.<br><br>E'lon joylash uchun:<br><div class="ki blu" style="display:inline-block;padding:3px 7px;margin-top:4px">➡️ @PandaBot</div><div class="ts">09:30</div></div>
+      <div class="sys">Foydalanuvchi xabari avtomatik o'chirildi</div>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<div class="sec">📄 Mulk Markazi · ⚙️ Admin Panel</div>
+<div class="row">
+
+  <div class="pw"><div class="lbl">37 · Notarius xizmati</div><div class="phone">
+    <div class="hd"><div class="av note">📄</div><div><div class="hn">Mulk Markazi</div><div class="hs on">● online</div></div></div>
+    <div class="chat">
+      <div class="b">📄 <strong>Hujjatlarni tekshirtirish</strong><br><br>9 ta tashkilotdan spravka:<br>✅ Litsevoy schot yo'qligi<br>✅ Qarzi yo'qligi<br>✅ Ipoteka/arrest yo'qligi<br>✅ va yana 6 ta spravka<br><br>💰 <strong>40–50 ming so'm</strong><div class="k"><div class="kr"><div class="ki G W">📄 Hujjatlarni tekshirtirish</div></div><div class="kr"><div class="ki W">🏛 Notariuslar ro'yxati</div></div></div><div class="ts">11:00</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl p">38 · 🤖 AI Konsultant</div><div class="phone">
+    <div class="hd"><div class="av ai">🤖</div><div><div class="hn">AI Konsultant</div><div class="hs on">● 08:00–21:00</div></div></div>
+    <div class="chat">
+      <div class="u">Uy sotib olishda qancha xarajat bo'ladi?<div class="ts">11:10</div></div>
+      <div class="b">Yaxshi savol! 😊<br><br>Toshkentda odatdagi xarajatlar:<br><br>📋 <strong>Notarius</strong> — 40–80k so'm<br>📝 <strong>Ro'yxatga olish</strong> — 150–300k so'm<br>💰 <strong>Soliq</strong> — 1–3% (summasidan)<br><br><em>Aniq ma'lumot uchun notariusga murojaat qiling.</em><div class="k"><div class="kr"><div class="ki G W">📄 Notariusga murojaat</div></div></div><div class="ts">11:10</div></div>
+    </div>
+    <div class="inp"><div class="if">Savol bering...</div><div class="is">➤</div></div>
+  </div></div>
+
+  <div class="pw"><div class="lbl r">39 · Admin panel</div><div class="phone">
+    <div class="hd"><div class="av admin">⚙️</div><div><div class="hn">Admin Panel</div><div class="hs" style="color:#e74c3c">● Faqat admin</div></div></div>
+    <div class="chat">
+      <div class="b">⚙️ <strong>Admin Panel</strong><br><br><div class="sr"><span>📋 Kutayotgan</span><span class="sv r">12 <span class="badge re">!</span></span></div><div class="sr"><span>✅ Tasdiqlangan</span><span class="sv">248</span></div><div class="sr"><span>👥 Foydalanuvchilar</span><span class="sv">1,247</span></div><div class="sr"><span>💰 Kunlik kirim</span><span class="sv">850k so'm</span></div><div class="sr"><span>🔌 API xarajat</span><span class="sv y">$12.40 / $50</span></div><div class="k" style="margin-top:6px"><div class="kr"><div class="ki R">📋 E'lonlar <span class="badge re">12</span></div></div><div class="kr"><div class="ki">👥 Foydalanuvchilar</div></div><div class="kr"><div class="ki Y">💰 Moliya</div></div><div class="kr"><div class="ki">🚫 Qora ro'yxat</div></div><div class="kr"><div class="ki gr">📊 API monitoring</div></div></div><div class="ts">Admin</div></div>
+    </div>
+  </div></div>
+
+  <div class="pw"><div class="lbl y">40 · Moliya taqsimoti</div><div class="phone">
+    <div class="hd"><div class="av admin">💰</div><div><div class="hn">Moliya Bo'limi</div><div class="hs on">● Real vaqt</div></div></div>
+    <div class="chat">
+      <div class="b">💰 <strong>Bugungi hisobot</strong><br><br><div class="sr"><span>Jami kirim</span><span class="sv g">850.000 so'm</span></div><div class="sr"><span>└ Notarius (70%)</span><span style="color:#7a9ab8">595.000</span></div><div class="sr"><span>└ Bizniki (30%)</span><span class="sv">255.000</span></div><hr class="sep"><div class="sr"><span>Oylik kirim</span><span class="sv g">18.7 mln so'm</span></div><div class="sr"><span>Notarius so'rovlar</span><span class="sv">17 ta</span></div><div class="sr"><span>Makler Pro obuna</span><span class="sv">5 ta</span></div><div class="sr"><span>AI API xarajat</span><span class="sv r">$12.40</span></div><div class="sr"><span>API budget limit</span><span class="sv y">$50 / oy</span></div><br><div class="k"><div class="kr"><div class="ki Y W">⚙️ Foizlarni sozlash</div></div></div><div class="ts">Bugun</div></div>
+    </div>
+  </div></div>
+
+</div>
+
+<div style="text-align:center;margin-top:60px;padding-top:20px;border-top:1px solid #1a2838;color:#253545;font-size:11px">
+  Uy Bozori Bot · TZ v2.2 · 40 ta ekran · Sotuvchi · Xaridor · Sync Engine · Admin
+</div>
+</body>
+</html>

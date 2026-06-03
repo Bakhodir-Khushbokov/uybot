@@ -1,0 +1,113 @@
+═══════════════════════════════════════════
+  UY BOZORI BOT — ISHGA TUSHIRISH YO'RIQNOMASI
+  v2.2  (aiogram 3.x + aiosqlite)
+═══════════════════════════════════════════
+
+1. TELEGRAM BOT TOKEN OLISH
+────────────────────────────
+• Telegramda @BotFather ga yozing
+• /newbot buyrug'ini yuboring
+• Bot nomini kiriting (masalan: Uy Bozori)
+• Username kiriting (masalan: toshkent_uy_bot)
+• Token olasiz: 123456789:AAHxxxxxxxxxxxxxxxx
+• Shu tokenni .env faylga yozing
+
+2. .env FAYLINI YARATISH
+────────────────────────
+  cp .env.example .env
+
+.env faylni ochib to'ldiring:
+  BOT_TOKEN=123456789:AAHxxxxxxxxxxxxxxxx
+  ADMIN_IDS=sizning_telegram_id_ingiz
+  DB_PATH=uy_bot.db
+
+Telegram ID sini bilish uchun @userinfobot ga /start yozing.
+
+3. PYTHON VA KUTUBXONALAR O'RNATISH
+─────────────────────────────────────
+  pip3 install -r requirements.txt
+
+4. LOKATSIYALAR YUKLASH
+────────────────────────
+Test uchun (namunaviy 41 ta hudud + 9 ta bino):
+  python3 import_locations.py
+
+Sizning 8200 ta hududlaringiz uchun (CSV kerak):
+  python3 import_locations.py sizning_faylingiz.csv
+
+CSV format (birinchi qator sarlavha bo'lishi shart):
+  viloyat,tuman,mahalla,postal_code
+  Toshkent shahri,Yunusobod tumani,Yunusobod 1-mahalla,100084
+
+5. BOTNI ISHGA TUSHIRISH
+─────────────────────────
+  python3 main.py
+
+"Bot ishga tushdi" degan xabar chiqsa — tayyor!
+Telegramda botingizga yozing: /start
+
+═══════════════════════════════════════════
+  ADMIN PANEL (BOTDAN TURIB KIRITISH)
+═══════════════════════════════════════════
+
+Yangi viloyat/tuman/mahalla qo'shish:
+  1. Botga /admin yozing
+  2. Kerakli tugmani tanlang
+
+Yangi bino (koordinata) qo'shish:
+  1. /admin → "🏢 Bino qo'sh"
+  2. Mahalla nomini yozing (qidiradi)
+  3. Dom raqamini yozing (masalan: 14A)
+  4. Telegramdan lokatsiya yuboring:
+     📎 → Lokatsiya → Hozirgi joylashuv
+
+Shundan keyin har qanday sotuvchi
+shu dom raqamini yozganida — bot
+avtomatik Telegram-lokatsiya pin ko'rsatadi! 📍
+
+═══════════════════════════════════════════
+  KO'P BERILADIGAN SAVOLLAR
+═══════════════════════════════════════════
+
+S: 8200 ta hududni qanday yuklash kerak?
+J: Excel/Google Sheets da 4 ta ustun:
+   viloyat | tuman | mahalla | postal_code
+   CSV sifatida saqlang → python3 import_locations.py fayl.csv
+
+S: Bot doim ishlab turishi uchun nima kerak?
+J: Bu MVP — test uchun. Keyinchalik VPS serverga
+   ko'chirish kerak (hozircha kompyuter yoqilganda ishlaydi).
+
+S: Xaridorga qanday xabar boradi?
+J: Sotuvchi e'lon joylashtirganida, shu filtr bo'yicha
+   obuna bo'lgan xaridorlarga avtomatik xabar boradi.
+
+S: Narx kamaysa bildirishnoma boradi?
+J: Ha. Sotuvchi "📉 Narx tushirish" tugmasini bossa,
+   shu e'lonni sevimlilariga qo'shgan barchaga xabar boradi.
+
+S: Kunlik limit nima?
+J: Har bir foydalanuvchi kuniga 3 ta e'lon joylashi mumkin.
+   config.py dagi DAILY_LISTING_LIMIT ni o'zgartirish mumkin.
+
+═══════════════════════════════════════════
+  FAYL TUZILMASI
+═══════════════════════════════════════════
+
+uy_bot/
+├── main.py              ← Botni ishga tushirish
+├── config.py            ← Token, limit, taqiqlangan so'zlar
+├── import_locations.py  ← Hududlarni CSV dan yuklash
+├── .env                 ← Token (gitga qo'shma!)
+├── database/
+│   └── db.py            ← Barcha DB funksiyalar
+├── handlers/
+│   ├── common.py        ← /start, til, telefon, rol
+│   ├── seller.py        ← E'lon joylash (to'liq oqim)
+│   ├── buyer.py         ← Qidirish, sevimlilar, tarix
+│   └── admin.py         ← /admin panel
+├── keyboards/
+│   ├── inline.py        ← Inline tugmalar
+│   └── reply.py         ← Reply tugmalar
+└── utils/
+    └── helpers.py       ← Narx formatlash, ban so'zlar
