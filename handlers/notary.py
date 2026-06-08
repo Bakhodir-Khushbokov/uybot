@@ -176,11 +176,32 @@ async def notary_got_doc(msg: Message, state: FSMContext):
     _doc_timers[user_id] = task
 
 
+@router.message(NotaryStates.upload_doc, F.video | F.animation)
+async def notary_doc_video(msg: Message):
+    await msg.answer(
+        "❌ Video va GIF qabul qilinmaydi.\n\n"
+        "📎 Iltimos, hujjatni <b>rasm</b> yoki <b>fayl</b> ko'rinishida yuboring.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(NotaryStates.upload_doc, F.audio | F.voice)
+async def notary_doc_audio(msg: Message):
+    await msg.answer(
+        "❌ Musiqa va ovoz xabari qabul qilinmaydi.\n\n"
+        "📎 Iltimos, hujjatni <b>rasm</b> yoki <b>fayl</b> ko'rinishida yuboring.",
+        parse_mode="HTML",
+    )
+
+
 @router.message(NotaryStates.upload_doc)
 async def notary_doc_wrong(msg: Message):
     if msg.text == "❌ Bekor qilish":
         return
-    await msg.answer("📎 Iltimos, hujjat rasmi yoki faylini yuboring.")
+    await msg.answer(
+        "📎 Iltimos, hujjatni <b>rasm</b> yoki <b>fayl</b> ko'rinishida yuboring.",
+        parse_mode="HTML",
+    )
 
 
 # ── To'lov cheki ─────────────────────────────────────────────
