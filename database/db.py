@@ -799,11 +799,12 @@ async def get_all_orgs(limit: int = 50) -> list[dict]:
 #  Notary orders
 # ─────────────────────────────────────────────────────────────
 async def create_notary_order(user_id: int, listing_id: int | None,
-                               doc_file_id: str, doc_type: str) -> int:
+                               doc_file_id: str, doc_type: str,
+                               doc_files_json: str = None) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
-            "INSERT INTO notary_orders (user_id, listing_id, doc_file_id, doc_type) VALUES (?,?,?,?)",
-            (user_id, listing_id, doc_file_id, doc_type),
+            "INSERT INTO notary_orders (user_id, listing_id, doc_file_id, doc_type, doc_files_json) VALUES (?,?,?,?,?)",
+            (user_id, listing_id, doc_file_id, doc_type, doc_files_json),
         )
         await db.commit()
         return cur.lastrowid

@@ -21,7 +21,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command
 
-from config import ADMIN_IDS, OWNER_IDS
+import json
+from config import ADMIN_IDS, OWNER_IDS, MEDIA_CHANNEL_ID
 import database as db
 from keyboards.reply import cancel_kb, main_menu_kb
 
@@ -47,10 +48,19 @@ STATUS_LABELS = {
 
 
 class NotaryStates(StatesGroup):
-    doc_type    = State()   # hujjat turi tanlash
-    upload_doc  = State()   # hujjat rasmini yuklash
-    upload_pay  = State()   # to'lov chekini yuklash
-    confirm     = State()   # tasdiqlash
+    doc_type    = State()
+    upload_doc  = State()
+    upload_pay  = State()
+    confirm     = State()
+
+
+class NotaryWorkerStates(StatesGroup):
+    upload_result = State()   # notarius natija rasmlarini yuklaydi
+
+
+# notarius_id → order_id (qaysi zayavka uchun rasm kutilmoqda)
+_worker_result_timers: dict[int, asyncio.Task] = {}
+_worker_order_map:    dict[int, int] = {}   # notarius_id → order_id
 
 
 # ── Inline klaviaturalar ─────────────────────────────────────
@@ -214,16 +224,41 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
     order_id = await db.create_notary_order(
         user_id=cb.from_user.id,
         listing_id=data.get("listing_id"),
-        doc_file_id=data.get("doc_file_id"),
+        doc_file_id=saved_doc_fids[0] if saved_doc_fids else data.get("doc_file_id"),
         doc_type=data.get("doc_type"),
+        doc_files_json=json.dumps(saved_doc_fids, ensure_ascii=False),
     )
-    await db.set_notary_payment(order_id, data.get("payment_file_id"))
+    await db.set_notary_payment(order_id, saved_payment_fid)
 
     sender = f"@{cb.from_user.username}" if cb.from_user.username else f"#{cb.from_user.id}"
     full_name = cb.from_user.full_name or ""
 
     import datetime
     now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+
+    # ── Rasmlarni kanalga saqlash ──────────────────────────────
+    doc_files      = data.get("doc_files") or [data.get("doc_file_id")]
+    payment_fid    = data.get("payment_file_id")
+    saved_doc_fids = []
+
+    for i, fid in enumerate(doc_files, 1):
+        try:
+            sent = await cb.bot.send_photo(
+                MEDIA_CHANNEL_ID, photo=fid,
+                caption=f"📎 Hujjat {i}/{len(doc_files)} | User:{cb.from_user.id} | {now}",
+            )
+            saved_doc_fids.append(sent.photo[-1].file_id)
+        except Exception:
+            saved_doc_fids.append(fid)  # fallback: original file_id
+
+    try:
+        pay_sent = await cb.bot.send_photo(
+            MEDIA_CHANNEL_ID, photo=payment_fid,
+            caption=f"💳 To'lov cheki | User:{cb.from_user.id} | {now}",
+        )
+        saved_payment_fid = pay_sent.photo[-1].file_id
+    except Exception:
+        saved_payment_fid = payment_fid
 
     # Faqat notarius rolidagi adminlarga yuborish
     # Agar notarius yo'q bo'lsa — super-admin va config adminlarga
@@ -243,16 +278,15 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
 
     for nid in notary_ids:
         try:
-            # Barcha hujjat rasmlari
-            doc_files = data.get("doc_files") or [data.get("doc_file_id")]
-            for i, fid in enumerate(doc_files, 1):
+            # Barcha hujjat rasmlari (kanaldan saqlangan)
+            for i, fid in enumerate(saved_doc_fids, 1):
                 await cb.bot.send_photo(
                     nid, photo=fid,
-                    caption=f"📎 Hujjat {i}/{len(doc_files)} — Zayavka #{order_id}",
+                    caption=f"📎 Hujjat {i}/{len(saved_doc_fids)} — Zayavka #{order_id}",
                 )
             # To'lov cheki
             await cb.bot.send_photo(
-                nid, photo=data["payment_file_id"],
+                nid, photo=saved_payment_fid,
                 caption=f"💳 To'lov cheki — Zayavka #{order_id}",
             )
             # Asosiy xabar + tugmalar
@@ -304,10 +338,10 @@ async def notary_cancel(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
-# ── Admin: zayavkani ko'rib chiqish ──────────────────────────
+# ── Notarius: zayavkani ko'rib chiqish ──────────────────────
 @router.callback_query(F.data.startswith("adm_not:"))
-async def admin_notary_action(cb: CallbackQuery):
-    parts = cb.data.split(":")
+async def admin_notary_action(cb: CallbackQuery, state: FSMContext):
+    parts    = cb.data.split(":")
     action   = parts[1]
     order_id = int(parts[2])
 
@@ -316,11 +350,27 @@ async def admin_notary_action(cb: CallbackQuery):
         await cb.answer("Zayavka topilmadi.", show_alert=True)
         return
 
+    # "done" bosilganda — avval natija rasmlarini so'raymiz
+    if action == "done":
+        _worker_order_map[cb.from_user.id] = order_id
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await cb.message.answer(
+            f"📤 <b>Zayavka #{order_id} — natija rasmlari</b>\n\n"
+            "Tekshirilgan hujjat va to'lov chekining rasmini yuboring.\n"
+            "Bir nechta rasm yuborishingiz mumkin.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"not_res:cancel:{order_id}")]
+            ])
+        )
+        await state.set_state(NotaryWorkerStates.upload_result)
+        await cb.answer()
+        return
+
     action_map = {
-        "approve":  ("payment_check", "✅ To'lov qabul qilindi"),
-        "process":  ("processing",    "⚙️ Jarayonga olindi"),
-        "done":     ("done",          "✔️ Bajarildi"),
-        "reject":   ("rejected",      "❌ Rad etildi"),
+        "approve": ("payment_check", "✅ To'lov qabul qilindi"),
+        "process": ("processing",    "⚙️ Jarayonga olindi"),
+        "reject":  ("rejected",      "❌ Rad etildi"),
     }
 
     if action not in action_map:
@@ -328,11 +378,9 @@ async def admin_notary_action(cb: CallbackQuery):
         return
 
     new_status, status_text = action_map[action]
-    await db.update_notary_order(order_id, new_status,
-                                  assigned_to=cb.from_user.id)
+    await db.update_notary_order(order_id, new_status, assigned_to=cb.from_user.id)
 
-    # Foydalanuvchiga xabar
-    user_msg_map = {
+    user_msgs = {
         "payment_check": (
             f"✅ <b>Zayavka #{order_id}: to'lovingiz qabul qilindi!</b>\n\n"
             "Hujjatingiz notariat tomonidan ko'rib chiqilmoqda."
@@ -341,28 +389,112 @@ async def admin_notary_action(cb: CallbackQuery):
             f"⚙️ <b>Zayavka #{order_id}: ishga tushdi!</b>\n\n"
             "Notarius hujjatingizni tayyorlashni boshladi."
         ),
-        "done": (
-            f"✅ <b>Zayavka #{order_id} bajarildi!</b>\n\n"
-            "Hujjatingiz tayyor. Notarius siz bilan bog'lanadi."
-        ),
         "rejected": (
             f"❌ <b>Zayavka #{order_id} rad etildi.</b>\n\n"
             "Sabab: hujjat yoki to'lov muammosi. Qayta murojaat qiling: /notary"
         ),
     }
-
     try:
         await cb.bot.send_message(
-            order["user_id"],
-            user_msg_map.get(new_status, f"Zayavka #{order_id} yangilandi."),
-            parse_mode="HTML",
+            order["user_id"], user_msgs.get(new_status, ""), parse_mode="HTML"
         )
     except Exception:
         pass
 
     await cb.message.edit_reply_markup(reply_markup=None)
-    await cb.message.answer(
-        f"✅ Zayavka #{order_id} → <b>{status_text}</b>",
-        parse_mode="HTML",
-    )
+    await cb.message.answer(f"✅ Zayavka #{order_id} → <b>{status_text}</b>", parse_mode="HTML")
     await cb.answer(status_text)
+
+
+# ── Notarius: natija rasmlarini yuklash (debounce) ───────────
+@router.message(NotaryWorkerStates.upload_result, F.photo | F.document)
+async def notary_worker_result_photo(msg: Message, state: FSMContext):
+    if msg.photo:
+        file_id = msg.photo[-1].file_id
+    else:
+        file_id = msg.document.file_id
+
+    data = await state.get_data()
+    result_files = data.get("result_files") or []
+    result_files.append(file_id)
+    await state.update_data(result_files=result_files)
+
+    worker_id = msg.from_user.id
+    if worker_id in _worker_result_timers:
+        _worker_result_timers[worker_id].cancel()
+
+    async def _send_results():
+        await asyncio.sleep(3)
+        order_id = _worker_order_map.get(worker_id)
+        if not order_id:
+            return
+
+        order = await db.get_notary_order(order_id)
+        if not order:
+            return
+
+        import datetime
+        now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+
+        # Kanalga saqlash
+        saved_fids = []
+        for i, fid in enumerate(result_files, 1):
+            try:
+                sent = await msg.bot.send_photo(
+                    MEDIA_CHANNEL_ID, photo=fid,
+                    caption=f"📤 Natija {i}/{len(result_files)} | Order:{order_id} | {now}",
+                )
+                saved_fids.append(sent.photo[-1].file_id)
+            except Exception:
+                saved_fids.append(fid)
+
+        # Mijozga yuborish
+        try:
+            await msg.bot.send_message(
+                order["user_id"],
+                f"✅ <b>Zayavka #{order_id} bajarildi!</b>\n\n"
+                "Notarius tekshirilgan hujjatlaringizni yubordi 👇",
+                parse_mode="HTML",
+            )
+            for fid in saved_fids:
+                await msg.bot.send_photo(order["user_id"], photo=fid)
+        except Exception:
+            pass
+
+        # Status yangilash
+        await db.update_notary_order(order_id, "done", assigned_to=worker_id)
+
+        await msg.answer(
+            f"✅ <b>Zayavka #{order_id} bajarildi!</b>\n"
+            f"Mijozga {len(saved_fids)} ta rasm yuborildi.",
+            parse_mode="HTML",
+        )
+        await state.clear()
+        _worker_order_map.pop(worker_id, None)
+        _worker_result_timers.pop(worker_id, None)
+
+    task = asyncio.create_task(_send_results())
+    _worker_result_timers[worker_id] = task
+
+    await msg.answer(
+        f"✅ {len(result_files)} ta rasm qabul qilindi.\n"
+        "Yana rasm yuborishingiz yoki kutishingiz mumkin (3 soniya).",
+    )
+
+
+@router.callback_query(NotaryWorkerStates.upload_result, F.data.startswith("not_res:cancel:"))
+async def notary_result_cancel(cb: CallbackQuery, state: FSMContext):
+    worker_id = cb.from_user.id
+    if worker_id in _worker_result_timers:
+        _worker_result_timers[worker_id].cancel()
+    _worker_order_map.pop(worker_id, None)
+    await state.clear()
+    await cb.message.edit_text("❌ Bekor qilindi. Zayavka hali ham ochiq.")
+    await cb.answer()
+
+
+@router.message(NotaryWorkerStates.upload_result)
+async def notary_worker_result_wrong(msg: Message):
+    if msg.text and msg.text.startswith("❌"):
+        return
+    await msg.answer("📸 Iltimos, rasm yuboring.")
