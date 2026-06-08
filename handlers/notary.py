@@ -178,12 +178,24 @@ async def notary_got_doc(msg: Message, state: FSMContext):
     async def _send_payment_prompt():
         await asyncio.sleep(3)
         count = len(doc_files)
+        payment_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💳 Click",   callback_data="pay_soon:click"),
+                InlineKeyboardButton(text="💜 Payme",   callback_data="pay_soon:payme"),
+            ],
+            [
+                InlineKeyboardButton(text="🟠 Uzum Pay", callback_data="pay_soon:uzum"),
+                InlineKeyboardButton(text="🔵 Paynet",   callback_data="pay_soon:paynet"),
+            ],
+            [
+                InlineKeyboardButton(text="💵 Karta orqali to'lash", callback_data="pay_soon:card"),
+            ],
+        ])
         await msg.answer(
             f"✅ <b>{count} ta hujjat qabul qilindi!</b>\n\n"
-            f"💳 Endi to'lovni amalga oshiring:\n\n"
-            f"📲 Karta raqami:\n<code>{NOTARY_CARD}</code>\n\n"
-            f"Miqdor: <b>{NOTARY_FEE}</b>\n\n"
-            "To'lovdan so'ng chekni <b>(rasm yoki screenshot)</b> yuboring 👇",
+            f"💰 To'lov miqdori: <b>{NOTARY_FEE}</b>\n\n"
+            "💳 Qulay to'lov turini tanlang 👇",
+            reply_markup=payment_kb,
             parse_mode="HTML",
         )
         await state.set_state(NotaryStates.upload_pay)
@@ -200,6 +212,36 @@ async def notary_doc_video(msg: Message):
         "📎 Iltimos, hujjatni <b>rasm</b> yoki <b>fayl</b> ko'rinishida yuboring.",
         parse_mode="HTML",
     )
+
+
+# ── To'lov tizimi tugmalari ───────────────────────────────────
+@router.callback_query(F.data.startswith("pay_soon:"))
+async def pay_soon_handler(cb: CallbackQuery, state: FSMContext):
+    method = cb.data.split(":")[1]
+
+    if method == "card":
+        # Karta orqali to'lash — raqamni ko'rsatamiz
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await cb.message.answer(
+            f"💳 <b>Karta orqali to'lash:</b>\n\n"
+            f"📲 Karta raqami:\n<code>{NOTARY_CARD}</code>\n\n"
+            f"💰 Miqdor: <b>{NOTARY_FEE}</b>\n\n"
+            "✅ To'lovdan so'ng chekni <b>(rasm yoki screenshot)</b> yuboring 👇",
+            parse_mode="HTML",
+        )
+    else:
+        names = {
+            "click":  "💳 Click",
+            "payme":  "💜 Payme",
+            "uzum":   "🟠 Uzum Pay",
+            "paynet": "🔵 Paynet",
+        }
+        name = names.get(method, method)
+        await cb.answer(
+            f"{name} tez orada ulanadi! Hozircha karta orqali to'lang.",
+            show_alert=True,
+        )
+    await cb.answer()
 
 
 @router.message(NotaryStates.upload_doc, F.audio | F.voice)
