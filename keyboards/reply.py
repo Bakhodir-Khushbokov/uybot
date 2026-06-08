@@ -48,7 +48,7 @@ def main_menu_kb(role: str = "buyer") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🔍 Uy qidirish")],
-            [KeyboardButton(text="❤️ Sevimlilar"), KeyboardButton(text="📂 Qidiruv tarixi")],
+            [KeyboardButton(text="❤️ Sevimlilar")],
             [KeyboardButton(text="➕ E'lon joylash")],
             [KeyboardButton(text="📜 Uy hujjatlarini tekshirish"), KeyboardButton(text="🏢 Tashkilotlar")],
             [KeyboardButton(text="💬 Fikr va takliflar")],
