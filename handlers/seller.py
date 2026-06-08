@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 
 from config import MEDIA_CHANNEL_ID
@@ -117,9 +117,61 @@ async def seller_viloyat(cb: CallbackQuery, state: FSMContext):
 async def seller_tuman(cb: CallbackQuery, state: FSMContext):
     tuman = cb.data[4:]
     await state.update_data(tuman=tuman, mah_offset=0, mah_query="")
-    await _show_mahallalar(cb.message, state)
-    await state.set_state(SellerStates.mahalla_page)
+    data = await state.get_data()
+
+    # Toshkent shahri uchun mahalla/kvartal tanlov
+    if data.get("viloyat") == "Toshkent shahri":
+        await cb.message.edit_text(
+            f"📍 <b>{tuman}</b>\n\nManzil turini tanlang:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏘 Mahalla",  callback_data="loc_type:mahalla")],
+                [InlineKeyboardButton(text="🔢 Kvartal",  callback_data="loc_type:kvartal")],
+            ]),
+            parse_mode="HTML",
+        )
+        await state.set_state(SellerStates.loc_type)
+    else:
+        await _show_mahallalar(cb.message, state)
+        await state.set_state(SellerStates.mahalla_page)
     await cb.answer()
+
+
+@router.callback_query(SellerStates.loc_type, F.data.startswith("loc_type:"))
+async def seller_loc_type(cb: CallbackQuery, state: FSMContext):
+    loc_type = cb.data.split(":")[1]
+    await state.update_data(loc_type=loc_type)
+
+    if loc_type == "mahalla":
+        await _show_mahallalar(cb.message, state)
+        await state.set_state(SellerStates.mahalla_page)
+    else:
+        # Kvartal — qo'lda kiritish
+        data = await state.get_data()
+        await cb.message.edit_text(
+            f"📍 <b>{data.get('tuman')}</b> — Kvartal raqami yoki nomini yozing:\n\n"
+            "_Masalan: 9-kvartal, Yunusobod 19-kvartal_",
+            parse_mode="Markdown",
+        )
+        await cb.message.answer("👇", reply_markup=cancel_kb())
+        await state.set_state(SellerStates.kvartal_manual)
+    await cb.answer()
+
+
+@router.message(SellerStates.kvartal_manual)
+async def seller_kvartal_manual(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish":
+        return
+    kvartal = msg.text.strip()
+    await state.update_data(mahalla_name=kvartal, location_id=None)
+    # Dom raqami so'rash
+    await msg.answer(
+        "Dom raqami yoki nomini yozing:\n"
+        "_Masalan: 14-A yoki Navruz ko'chasi 22_\n\n"
+        "Bilmasangiz — «—» yozing",
+        parse_mode="Markdown",
+        reply_markup=cancel_kb(),
+    )
+    await state.set_state(SellerStates.dom_number)
 
 
 async def _show_mahallalar(msg, state: FSMContext, edit: bool = True):
