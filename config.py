@@ -10,7 +10,8 @@ OWNER_IDS        = [int(i) for i in os.getenv("OWNER_IDS", os.getenv("ADMIN_IDS"
 MEDIA_CHANNEL_ID    = int(os.getenv("MEDIA_CHANNEL_ID",    "0"))  # eski, backwards compat
 LISTINGS_CHANNEL_ID = int(os.getenv("LISTINGS_CHANNEL_ID", os.getenv("MEDIA_CHANNEL_ID", "0")))
 NOTARY_CHANNEL_ID   = int(os.getenv("NOTARY_CHANNEL_ID",   os.getenv("MEDIA_CHANNEL_ID", "0")))
-ORGS_CHANNEL_ID     = int(os.getenv("ORGS_CHANNEL_ID",     os.getenv("MEDIA_CHANNEL_ID", "0")))
+ORGS_CHANNEL_ID      = int(os.getenv("ORGS_CHANNEL_ID",      os.getenv("MEDIA_CHANNEL_ID", "0")))
+FEEDBACK_CHANNEL_ID  = int(os.getenv("FEEDBACK_CHANNEL_ID", "0"))
 DONATION_CARD    = os.getenv("DONATION_CARD", "")
 
 # E'lon limiti (oddiy foydalanuvchi)
