@@ -77,6 +77,13 @@ async def seller_dom_type(cb: CallbackQuery, state: FSMContext):
 
 
 # ── 2. Viloyat ───────────────────────────────────────────────
+def _sort_viloyatlar(viloyatlar: list[str]) -> list[str]:
+    priority = ["Toshkent shahri", "Toshkent viloyati"]
+    top  = [v for v in priority if v in viloyatlar]
+    rest = sorted([v for v in viloyatlar if v not in priority])
+    return top + rest
+
+
 async def _ask_viloyat(msg, state: FSMContext):
     viloyatlar = await db.get_viloyatlar()
     if not viloyatlar:
@@ -85,7 +92,7 @@ async def _ask_viloyat(msg, state: FSMContext):
     await msg.edit_text(
         f"{make_progress(2, 6)}\n\n"
         "📍 Viloyatni tanlang:",
-        reply_markup=viloyat_kb(viloyatlar),
+        reply_markup=viloyat_kb(_sort_viloyatlar(viloyatlar)),
         parse_mode="Markdown",
     )
     await state.set_state(SellerStates.viloyat)

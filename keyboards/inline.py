@@ -33,8 +33,8 @@ def role_kb() -> InlineKeyboardMarkup:
 def transaction_kb() -> InlineKeyboardMarkup:
     """Sotuvchi uchun"""
     return kb(
-        [("🏷 Sotish",        "trx:sotish")],
-        [("🔑 Ijaraga berish", "trx:arenda")],
+        [("🏷 Uyimni sotaman",    "trx:sotish")],
+        [("🔑 Ijaraga beraman",   "trx:arenda")],
     )
 
 
