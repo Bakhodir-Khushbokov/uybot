@@ -128,12 +128,35 @@ async def feedback_text(msg: Message, state: FSMContext):
         except Exception:
             pass
 
+    # Har bir tur uchun alohida javob
+    ftype = data.get("feedback_type", "")
+    auto_replies = {
+        "fikr": (
+            "✅ Fikringiz uchun katta rahmat!\n\n"
+            "Siz bildirgan taassurot bizning xizmatimizni yaxshilashga bevosita yordam beradi. "
+            "Har bir fikr bizga juda muhim 🙏"
+        ),
+        "taklif": (
+            "✅ Taklifingiz qabul qilindi!\n\n"
+            "Aytgan g'oyangizni ko'rib chiqamiz. "
+            "Agar amalga oshirilsa, birinchilar qatorida siz bilib olasiz 💡"
+        ),
+        "shikoyat": (
+            "✅ Shikoyatingiz qabul qilindi!\n\n"
+            "Vaziyatni ko'rib chiqamiz va zarur chora ko'ramiz. "
+            "Muammo hal bo'lgach, sizga albatta xabar beramiz 🙏"
+        ),
+        "loyiha": (
+            "✅ G'oyangiz qabul qilindi!\n\n"
+            "Loyiha uchun taklif qilgan g'oyangiz bilan tanishamiz. "
+            "Qiziqarli va amalga oshirilishi mumkin bo'lsa, siz bilan bog'lanamiz 🚀"
+        ),
+    }
+    reply_text = auto_replies.get(ftype, "✅ Xabaringiz yuborildi!\n\nRahmat 🙏")
+
     user = await db.get_user(msg.from_user.id)
     role = user["role"] if user else "buyer"
-    await msg.answer(
-        "✅ Xabaringiz yuborildi!\n\nRahmat, fikringiz bizga muhim 🙏",
-        reply_markup=main_menu_kb(role),
-    )
+    await msg.answer(reply_text, reply_markup=main_menu_kb(role))
     await state.clear()
 
 
