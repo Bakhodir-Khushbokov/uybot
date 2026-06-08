@@ -11,39 +11,55 @@ DOM_TYPE_LABELS = {
     "eski": "🏚 Eski dom",
 }
 RENOVATION_LABELS = {
-    "evro":    "✨ Evro",
-    "orta":    "🏠 O'rta",
-    "qora":    "🪣 Qora (ta'mirsiz)",
-    "muallim": "🆕 Muallim",
+    "karobka":    "🧱 Karobka",
+    "tamirtalab": "🔧 Ta'mirtalab",
+    "ortacha":    "🏠 O'rtacha",
+    "kosmetika":  "🎨 Kosmetika",
+    "kapital":    "🏗 Kapital ta'mir",
+    "evro":       "✨ Yevroremont",
+    "dizayn":     "🖼 Dizaynerlik",
 }
 RENOVATION_SHORT = {
-    "evro": "evro", "orta": "o'rta", "qora": "qora", "muallim": "muallim"
+    "karobka":    "karobka",
+    "tamirtalab": "ta'mirtalab",
+    "ortacha":    "o'rtacha",
+    "kosmetika":  "kosmetika",
+    "evro":       "yevroremont",
+    "dizayn":     "dizayn",
+    "kapital":    "kapital",
 }
 
 
-def format_price(amount: float, currency: str) -> str:
+RENT_PERIOD_LABELS = {
+    "oylik":    "/oy",
+    "haftalik": "/hafta",
+    "kunlik":   "/kun",
+}
+
+
+def format_price(amount: float, currency: str, rent_period: str = None) -> str:
     """
     USD:  47500      → 47.500$
     So'm: 350_000_000 → 350 mln so'm
           1_200_000_000 → 1.2 mlrd so'm
     """
+    suffix = RENT_PERIOD_LABELS.get(rent_period, "") if rent_period else ""
     if currency == "usd":
-        s = f"{int(amount):,}".replace(",", ".")
-        return f"{s}$"
+        return f"{int(amount)}${suffix}"
     else:
         n = int(amount)
         if n >= 1_000_000_000:
             mlrd = n // 1_000_000_000
             qolgan_mln = (n % 1_000_000_000) // 1_000_000
             if qolgan_mln:
-                return f"{mlrd} mlrd {qolgan_mln} mln so'm"
-            return f"{mlrd} mlrd so'm"
+                return f"{mlrd} mlrd {qolgan_mln} mln so'm{suffix}"
+            return f"{mlrd} mlrd so'm{suffix}"
         else:
             mln = n // 1_000_000
             qolgan = (n % 1_000_000) // 1_000
             if qolgan:
-                return f"{mln} mln {qolgan} ming so'm"
-            return f"{mln} mln so'm"
+                return f"{mln} mln {qolgan} ming so'm{suffix}"
+            return f"{mln} mln so'm{suffix}"
 
 
 def parse_price_usd(text: str) -> float | None:
@@ -127,34 +143,93 @@ def listing_short_line(lst: dict) -> str:
     return " · ".join(parts)
 
 
-def listing_full_card(lst: dict, loc: dict | None = None) -> str:
-    """Format 1 — to'liq karta matni."""
-    ptype  = PROPERTY_LABELS.get(lst.get("property_type", ""), "🏠")
-    dtype  = DOM_TYPE_LABELS.get(lst.get("dom_type", ""), "")
-    renov  = RENOVATION_LABELS.get(lst.get("renovation", ""), "")
+RENT_FOR_LABELS = {
+    "oila": "👨‍👩‍👧 Oila", "chet_ellik": "🌍 Chet ellik",
+    "yigitlar": "👦 Yigitlar", "qizlar": "👧 Qizlar", "farqi_yoq": "✅ Farqi yo'q",
+}
+JIHOZ_ICONS = {
+    "televizor": "📺", "konditsioner": "❄️", "xolodilnik": "🧊",
+    "steralka": "🫧", "shkaf": "🚪", "gilam": "🏠",
+    "spalnya": "🛏", "divan": "🛋",
+}
 
-    lines = [f"{ptype}" + (f" · {dtype}" if dtype else "")]
+
+def listing_full_card(lst: dict, loc: dict | None = None) -> str:
+    """
+    Tartib:
+      1. Shahar · Mahalla · Mo'ljal
+      2. Tur (Ijara/Sotish · Kvartira · Novostroyka)
+      3. Tavsif (xona, qavat, maydon, remont, balkon, jihoz, kimlar uchun, komisyon)
+      4. Narx
+      5. Telefon
+    """
+    import json as _json
+
+    lines = []
+
+    # 1. Joylashuv — birinchi qatorda
     if loc:
-        loc_str = f"{loc['viloyat']}, {loc['tuman']}, {loc['mahalla']}"
+        loc_parts = []
+        city = loc.get("viloyat", "")
+        tuman = loc.get("tuman", "").replace(" tumani", "").replace(" shahri", "")
+        mahalla = loc.get("mahalla", "")
+        if city:   loc_parts.append(city)
+        if tuman:  loc_parts.append(tuman)
+        if mahalla: loc_parts.append(mahalla)
+        loc_str = " · ".join(loc_parts)
         if lst.get("landmark"):
             loc_str += f" · _{lst['landmark']}_"
         lines.append(f"📍 {loc_str}")
+    elif lst.get("landmark"):
+        lines.append(f"📍 _{lst['landmark']}_")
 
-    details = []
-    if lst.get("xonalar"):   details.append(f"🛏 {lst['xonalar']} xona")
-    if lst.get("floor"):     details.append(f"🏗 {lst['floor']}/{lst['total_floors']} qavat")
-    if lst.get("area"):      details.append(f"📐 {int(lst['area'])} m²")
-    if details:
-        lines.append("  ".join(details))
+    # 2. Tur
+    trx   = "🔑 Ijara" if lst.get("transaction_type") == "arenda" else "🏷 Sotish"
+    ptype = PROPERTY_LABELS.get(lst.get("property_type", ""), "🏠")
+    dtype = DOM_TYPE_LABELS.get(lst.get("dom_type", ""), "")
+    tur_line = f"{trx}  |  {ptype}"
+    if dtype:
+        tur_line += f"  ·  {dtype}"
+    lines.append(tur_line)
+
+    # 3. Tavsif
+    if lst.get("xonalar"):
+        lines.append(f"🛏 {lst['xonalar']} xona")
+    if lst.get("floor") and lst.get("total_floors"):
+        lines.append(f"🏢 {lst['floor']}/{lst['total_floors']} qavat")
+    if lst.get("area"):
+        lines.append(f"📐 {int(lst['area'])} m²")
+
+    renov = RENOVATION_LABELS.get(lst.get("renovation", ""), "")
     if renov:
         lines.append(f"🔨 {renov}")
-    if lst.get("price_display"):
-        lines.append(f"💰 *{lst['price_display']}*")
 
+    if lst.get("balkon"):
+        lines.append(f"🪟 Balkon: {lst['balkon']} m")
+
+    if lst.get("jihoz"):
+        try:
+            items = _json.loads(lst["jihoz"]) if isinstance(lst["jihoz"], str) else lst["jihoz"]
+            names = [JIHOZ_ICONS.get(i, "") + " " + i.capitalize() for i in items if i]
+            if names:
+                lines.append("🛋 " + "  ".join(names))
+        except Exception:
+            pass
+
+    if lst.get("rent_for"):
+        lines.append(f"👥 {RENT_FOR_LABELS.get(lst['rent_for'], lst['rent_for'])}")
+
+    if lst.get("has_commission"):
+        lines.append("💼 Vositachilik haqi: bor")
+
+    # 4. Narx
+    if lst.get("price_display"):
+        lines.append(f"\n💰 *{lst['price_display']}*")
+
+    # 5. Telefon
     phone = lst.get("phone", "")
     if phone:
-        masked = mask_phone(phone)
-        lines.append(f"📞 {masked}")
+        lines.append(f"📞 {mask_phone(phone)}")
 
     return "\n".join(lines)
 

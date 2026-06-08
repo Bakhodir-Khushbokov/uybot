@@ -5,7 +5,10 @@ load_dotenv()
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
 DB_PATH     = os.getenv("DB_PATH", "uy_bot.db")
-ADMIN_IDS   = [int(i) for i in os.getenv("ADMIN_IDS", "").split(",") if i.strip().isdigit()]
+ADMIN_IDS        = [int(i) for i in os.getenv("ADMIN_IDS", "").split(",") if i.strip().isdigit()]
+OWNER_IDS        = [int(i) for i in os.getenv("OWNER_IDS", os.getenv("ADMIN_IDS", "")).split(",") if i.strip().isdigit()]
+MEDIA_CHANNEL_ID = int(os.getenv("MEDIA_CHANNEL_ID", "0"))
+DONATION_CARD    = os.getenv("DONATION_CARD", "")
 
 # E'lon limiti (oddiy foydalanuvchi)
 DAILY_LISTING_LIMIT = 3

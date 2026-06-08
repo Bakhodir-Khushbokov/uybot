@@ -29,6 +29,33 @@ def role_kb() -> InlineKeyboardMarkup:
     )
 
 
+# ── Tranzaksiya turi ─────────────────────────────────────────
+def transaction_kb() -> InlineKeyboardMarkup:
+    """Sotuvchi uchun"""
+    return kb(
+        [("🏷 Sotish",        "trx:sotish")],
+        [("🔑 Ijaraga berish", "trx:arenda")],
+    )
+
+
+def buyer_transaction_kb() -> InlineKeyboardMarkup:
+    """Xaridor uchun"""
+    return kb(
+        [("🏷 Sotib olishga izlayabman",  "trx:sotish")],
+        [("🔑 Ijaraga izlayabman",         "trx:arenda")],
+    )
+
+
+def rent_for_kb() -> InlineKeyboardMarkup:
+    return kb(
+        [("👨‍👩‍👧 Oila",        "rf:oila")],
+        [("🌍 Chet ellik",   "rf:chet_ellik")],
+        [("👦 Yigitlar",     "rf:yigitlar")],
+        [("👧 Qizlar",       "rf:qizlar")],
+        [("✅ Farqi yo'q",   "rf:farqi_yoq")],
+    )
+
+
 # ── Mulk turi ────────────────────────────────────────────────
 def property_type_kb(prefix: str = "pt") -> InlineKeyboardMarkup:
     return kb(
@@ -36,7 +63,6 @@ def property_type_kb(prefix: str = "pt") -> InlineKeyboardMarkup:
          ("🏢 Kvartira",       f"{prefix}:kvartira")],
         [("🏬 Ofis / Noturar", f"{prefix}:ofis"),
          ("🌿 Yer",            f"{prefix}:yer")],
-        [("❓ Yordam",         "help:property_type")],
     )
 
 
@@ -45,22 +71,32 @@ def dom_type_kb() -> InlineKeyboardMarkup:
     return kb(
         [("🏢 Novostroyka (Yangi qurilish)", "dt:novo")],
         [("🏚 Eski dom",                     "dt:eski")],
-        [("❓ Yordam", "help:dom_type"), ("⬅️ Ortga", "back:property_type")],
+        [("⬅️ Ortga", "back:property_type")],
     )
 
 
 # ── Viloyat ──────────────────────────────────────────────────
-def viloyat_kb(viloyatlar: list[str], prefix: str = "vil") -> InlineKeyboardMarkup:
+def viloyat_kb(viloyatlar: list[str], prefix: str = "vil",
+               extra_top: str = None) -> InlineKeyboardMarkup:
     rows = []
+    # Yuqorida qo'shimcha tugma (masalan "Butun O'zbekiston")
+    if extra_top:
+        text, data = extra_top.split("|")
+        rows.append([(text, data)])
     row = []
     for v in viloyatlar:
-        short = v.replace(" shahri", " sh.").replace(" viloyati", "")
+        if v == "Toshkent shahri":
+            short = "Toshkent shahar"
+        elif v == "Toshkent viloyati":
+            short = "Toshkent viloyati"
+        else:
+            short = v.replace(" viloyati", "").replace(" shahri", "")
         row.append((short, f"{prefix}:{v}"))
         if len(row) == 2:
             rows.append(row); row = []
     if row:
         rows.append(row)
-    rows.append([("🔍 Qidirish", "search:vil"), ("❓", "help:location"), ("⬅️", "back:dom_type")])
+    rows.append([("🔍 Qidirish", "search:vil"), ("⬅️ Ortga", "back:dom_type")])
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t, callback_data=d) for t, d in row]
         for row in rows
@@ -78,7 +114,7 @@ def tuman_kb(tumanlar: list[str], prefix: str = "tum") -> InlineKeyboardMarkup:
             rows.append(row); row = []
     if row:
         rows.append(row)
-    rows.append([("❓", "help:location"), ("⬅️", "back:viloyat")])
+    rows.append([("⬅️ Ortga", "back:viloyat")])
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t, callback_data=d) for t, d in row]
         for row in rows
@@ -129,11 +165,14 @@ def loc_save_kb() -> InlineKeyboardMarkup:
 # ── Remont ──────────────────────────────────────────────────
 def renovation_kb() -> InlineKeyboardMarkup:
     return kb(
-        [("✨ Evro",            "renov:evro")],
-        [("🏠 O'rta",           "renov:orta")],
-        [("🪣 Qora (ta'mirsiz)", "renov:qora")],
-        [("🆕 Muallim",         "renov:muallim")],
-        [("❓ Yordam", "help:renovation"), ("⬅️ Ortga", "back:area")],
+        [("🧱 Karobka",          "renov:karobka")],
+        [("🔧 Ta'mirtalab",       "renov:tamirtalab")],
+        [("🏠 O'rtacha",         "renov:ortacha")],
+        [("🎨 Kosmetika",        "renov:kosmetika")],
+        [("🏗 Kapital ta'mir",   "renov:kapital")],
+        [("✨ Yevroremont",      "renov:evro")],
+        [("🖼 Dizaynerlik",      "renov:dizayn")],
+        [("⬅️ Ortga", "back:area")],
     )
 
 
@@ -141,7 +180,7 @@ def renovation_kb() -> InlineKeyboardMarkup:
 def currency_kb() -> InlineKeyboardMarkup:
     return kb(
         [("💵 Dollar ($)", "cur:usd"), ("🇺🇿 So'm",  "cur:som")],
-        [("❓ Yordam", "help:price"), ("⬅️ Ortga", "back:landmark")],
+        [("⬅️ Ortga", "back:landmark")],
     )
 
 
@@ -188,59 +227,112 @@ def results_nav_kb(offset: int, total: int, filter_key: str) -> InlineKeyboardMa
 
 # ── Xonalar ─────────────────────────────────────────────────
 def xonalar_kb(prefix: str = "xon", with_any: bool = False,
-               extended: bool = False) -> InlineKeyboardMarkup:
+               page: int = 0) -> InlineKeyboardMarkup:
     """
-    extended=False → 1–16 ko'rsatiladi + "Ko'proq 17–48" tugmasi
-    extended=True  → 17–48 ko'rsatiladi + "Kamroq" tugmasi
+    page=0 → 1–6   + "➕ Ko'proq (7–15)"
+    page=1 → 7–15  + "⬅️ Kamroq"
     """
     rows = []
-    if not extended:
-        nums = range(1, 17)          # 1–16
+    if page == 0:
+        nums = range(1, 7)       # 1–6
     else:
-        nums = range(17, 49)         # 17–48
+        nums = range(7, 16)      # 7–15
 
-    # 4 ta ustun
     chunk = [InlineKeyboardButton(text=str(n), callback_data=f"{prefix}:{n}")
              for n in nums]
-    for i in range(0, len(chunk), 4):
-        rows.append(chunk[i:i+4])
+    # 3 ta ustun
+    for i in range(0, len(chunk), 3):
+        rows.append(chunk[i:i+3])
 
-    # Ko'proq / Kamroq tugmasi
-    if not extended:
-        rows.append([InlineKeyboardButton(text="➕ Ko'proq (17–48)",
-                                          callback_data=f"{prefix}:more")])
+    if page == 0:
+        rows.append([InlineKeyboardButton(text="➕ Ko'proq (7–15)",
+                                          callback_data=f"{prefix}:p1")])
     else:
-        rows.append([InlineKeyboardButton(text="⬅️ Kamroq (1–16)",
-                                          callback_data=f"{prefix}:less")])
+        rows.append([InlineKeyboardButton(text="⬅️ Kamroq (1–6)",
+                                          callback_data=f"{prefix}:p0")])
 
     if with_any:
         rows.append([InlineKeyboardButton(text="✅ Farqi yo'q",
                                           callback_data=f"{prefix}:any")])
 
-    rows.append([InlineKeyboardButton(text="❓ Yordam", callback_data="help:xonalar")])
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="back:video")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # ── Qavat tanlash (floor) ────────────────────────────────────
-def floor_kb(prefix: str = "fl", extended: bool = False) -> InlineKeyboardMarkup:
+def floor_kb(prefix: str = "fl", page: int = 0) -> InlineKeyboardMarkup:
     """
-    extended=False → 1–16 ko'rsatiladi
-    extended=True  → 17–48 ko'rsatiladi
+    page=0 → 1–16   + "➕ Yana (17–32)"
+    page=1 → 17–32  + "➕ Yana (33–46)"  + "⬅️ Kamroq"
+    page=2 → 33–46  + "⬅️ Kamroq"
     """
     rows = []
-    nums = range(17, 49) if extended else range(1, 17)
+    if page == 0:
+        nums = range(1, 17)
+    elif page == 1:
+        nums = range(17, 33)
+    else:
+        nums = range(33, 47)
 
     chunk = [InlineKeyboardButton(text=str(n), callback_data=f"{prefix}:{n}")
              for n in nums]
+    # 4 ta ustun
     for i in range(0, len(chunk), 4):
         rows.append(chunk[i:i+4])
 
-    if not extended:
-        rows.append([InlineKeyboardButton(text="➕ Ko'proq (17–48)",
-                                          callback_data=f"{prefix}:more")])
-    else:
-        rows.append([InlineKeyboardButton(text="⬅️ Kamroq (1–16)",
-                                          callback_data=f"{prefix}:less")])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️ Kamroq",
+                                        callback_data=f"{prefix}:p{page-1}"))
+    if page == 0:
+        nav.append(InlineKeyboardButton(text="➕ Yana (17–32)",
+                                        callback_data=f"{prefix}:p1"))
+    elif page == 1:
+        nav.append(InlineKeyboardButton(text="➕ Yana (33–46)",
+                                        callback_data=f"{prefix}:p2"))
+    if nav:
+        rows.append(nav)
+
+    # Ortga: fl → xonalar, tf → floor
+    back_target = "xonalar" if prefix == "fl" else "floor"
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data=f"back:{back_target}")])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Maydon (area) ────────────────────────────────────────────
+def area_kb(prefix: str = "area", page: int = 0) -> InlineKeyboardMarkup:
+    """
+    page=0 → 28–67
+    page=1 → 68–107
+    page=2 → 108–150
+    + "✏️ O'zim yozaman" har doim
+    """
+    PER_PAGE = 40
+    starts = [28, 68, 108]
+    start = starts[page]
+    end   = min(start + PER_PAGE, 151)   # 150 gacha
+
+    rows = []
+    chunk = [InlineKeyboardButton(text=str(n), callback_data=f"{prefix}:{n}")
+             for n in range(start, end)]
+    for i in range(0, len(chunk), 5):
+        rows.append(chunk[i:i+5])
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text=f"⬅️ Kamroq ({starts[page-1]}–{start-1})",
+                                        callback_data=f"{prefix}:p{page-1}"))
+    if end < 151:
+        nav.append(InlineKeyboardButton(text=f"➕ Yana ({end}→)",
+                                        callback_data=f"{prefix}:p{page+1}"))
+    if nav:
+        rows.append(nav)
+
+    rows.append([InlineKeyboardButton(text="✏️ O'zim yozaman",
+                                      callback_data=f"{prefix}:manual"),
+                 InlineKeyboardButton(text="⬅️ Ortga",
+                                      callback_data="back:total_floors")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -255,8 +347,61 @@ def dom_type_filter_kb() -> InlineKeyboardMarkup:
 
 def renovation_filter_kb() -> InlineKeyboardMarkup:
     return kb(
-        [("✨ Evro",  "fren:evro"), ("🏠 O'rta",  "fren:orta")],
-        [("🪣 Qora",  "fren:qora"), ("🆕 Muallim","fren:muallim")],
+        [("🧱 Karobka",    "fren:karobka"), ("🔧 Ta'mirtalab", "fren:tamirtalab")],
+        [("🏠 O'rtacha",         "fren:ortacha"),  ("🎨 Kosmetika",       "fren:kosmetika")],
+        [("🏗 Kapital ta'mir",  "fren:kapital"),  ("✨ Yevroremont",     "fren:evro")],
+        [("🖼 Dizaynerlik",     "fren:dizayn")],
         [("✅ Farqi yo'q", "fren:any")],
         [("⬅️ Ortga", "back:dom_type_filter")],
+    )
+
+
+# ── Shikoyat sababi ──────────────────────────────────────────
+def report_reason_kb(listing_id: int) -> InlineKeyboardMarkup:
+    return kb(
+        [("🎭 Firibgar / Soxta e'lon", f"rep:firib:{listing_id}")],
+        [("💰 Noto'g'ri narx",         f"rep:narx:{listing_id}")],
+        [("📵 Aloqa yo'q / Boshqa tel", f"rep:boshqa:{listing_id}")],
+        [("♻️ Takroriy e'lon",          f"rep:takror:{listing_id}")],
+        [("🚫 Spam",                    f"rep:spam:{listing_id}")],
+    )
+
+
+# ── Balkon ──────────────────────────────────────────────────
+def balkon_kb() -> InlineKeyboardMarkup:
+    return kb(
+        [("1×3",   "blk:1x3"),   ("1.5×3", "blk:1.5x3")],
+        [("1×7",   "blk:1x7"),   ("1.5×6", "blk:1.5x6")],
+        [("2×6",   "blk:2x6")],
+        [("❌ Balkonsiz", "blk:yoq")],
+    )
+
+
+# ── Jihoz (multi-select) ─────────────────────────────────────
+JIHOZ_LIST = [
+    ("📺 Televizor",            "televizor"),
+    ("❄️ Konditsioner",         "konditsioner"),
+    ("🧊 Xolodilnik",           "xolodilnik"),
+    ("🫧 Kir yuvish mashinasi", "steralka"),
+    ("🚪 Shkaf",                "shkaf"),
+    ("🏠 Gilam",                "gilam"),
+    ("🛏 Spalnya",              "spalnya"),
+    ("🛋 Divan",                "divan"),
+]
+
+
+def jihoz_kb(selected: set) -> InlineKeyboardMarkup:
+    rows = []
+    for label, key in JIHOZ_LIST:
+        mark = "✅ " if key in selected else "◻️ "
+        rows.append([InlineKeyboardButton(text=mark + label, callback_data=f"jh:{key}")])
+    rows.append([InlineKeyboardButton(text="✔️ Tayyor", callback_data="jh:done")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Vositachilik haqi ────────────────────────────────────────
+def commission_kb() -> InlineKeyboardMarkup:
+    return kb(
+        [("✅ Ha, bor",  "com:yes")],
+        [("❌ Yo'q",     "com:no")],
     )

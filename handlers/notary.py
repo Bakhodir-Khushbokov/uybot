@@ -1,0 +1,348 @@
+"""
+Notariat xizmati moduli.
+
+Foydalanuvchi oqimi:
+  1. "📜 Uy hujjatlarini tekshirish" tugmasi yoki /notary buyrug'i
+  2. Hujjat turi tanlanadi
+  3. Hujjat rasmi/scan yuklanadi
+  4. To'lov cheki (screenshot) yuklanadi
+  5. Zayavka adminga yuboriladi, foydalanuvchiga ID beriladi
+
+Admin oqimi (admin.py orqali):
+  adm_not:{action}:{order_id}  → approve / reject / assign:{admin_id}
+"""
+import asyncio
+from aiogram import Router, F
+from aiogram.types import (
+    Message, CallbackQuery,
+    InlineKeyboardMarkup, InlineKeyboardButton,
+)
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters import Command
+
+from config import ADMIN_IDS, OWNER_IDS
+import database as db
+from keyboards.reply import cancel_kb, main_menu_kb
+
+# user_id → asyncio.Task (debounce)
+_doc_timers: dict[int, asyncio.Task] = {}
+
+router = Router()
+
+NOTARY_FEE = "50 000 so'm"          # namoyish uchun; real ma'lumot .env da bo'lishi mumkin
+NOTARY_CARD = "8600 1234 5678 9012"  # to'lov kartasi (config dan ham olish mumkin)
+
+DOC_TYPES = {
+    "savdo": "📄 Uy oldi-sottisi shartnomasi",
+}
+
+STATUS_LABELS = {
+    "new":           "🆕 Yangi",
+    "payment_check": "💳 To'lov tekshirilmoqda",
+    "processing":    "⚙️ Jarayonda",
+    "done":          "✅ Bajarildi",
+    "rejected":      "❌ Rad etildi",
+}
+
+
+class NotaryStates(StatesGroup):
+    doc_type    = State()   # hujjat turi tanlash
+    upload_doc  = State()   # hujjat rasmini yuklash
+    upload_pay  = State()   # to'lov chekini yuklash
+    confirm     = State()   # tasdiqlash
+
+
+# ── Inline klaviaturalar ─────────────────────────────────────
+def doc_type_kb() -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=label, callback_data=f"nt_dt:{key}")]
+            for key, label in DOC_TYPES.items()]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def notary_confirm_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Yuborish",       callback_data="nt:send")],
+        [InlineKeyboardButton(text="🔄 Qaytadan boshlash", callback_data="nt:restart")],
+        [InlineKeyboardButton(text="❌ Bekor qilish",   callback_data="nt:cancel")],
+    ])
+
+
+def admin_notary_kb(order_id: int, assigned: bool = False) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text="✅ Qabul qilish",   callback_data=f"adm_not:approve:{order_id}"),
+         InlineKeyboardButton(text="❌ Rad etish",      callback_data=f"adm_not:reject:{order_id}")],
+        [InlineKeyboardButton(text="⚙️ Jarayonga olish", callback_data=f"adm_not:process:{order_id}")],
+        [InlineKeyboardButton(text="✔️ Bajarildi",      callback_data=f"adm_not:done:{order_id}")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Boshlash ─────────────────────────────────────────────────
+@router.message(F.text == "📜 Uy hujjatlarini tekshirish")
+@router.message(Command("notary"))
+async def notary_start(msg: Message, state: FSMContext):
+    await state.clear()
+    await msg.answer(
+        "📜 <b>Ko'chmas mulk hujjatlarini notariusga tayyorligini online tekshirish</b>\n\n"
+        "Uy hujjatlari notariusga tayyormi, qarzlari bormi yoki taqiqda turibdimi — "
+        "hammasini bir zumda online tekshirib olasiz:\n\n"
+        "1. 🏛 Soliq qarzdorligi\n"
+        "2. 📐 Kadastr — taqiq, arest va cheklovlar mavjud emasligi; egalik huquqi hujjatga mosligi\n"
+        "3. ⚡️ Elektr energiyasi\n"
+        "4. 🔥 Gaz xizmati\n"
+        "5. 💧 Sovuq suv va oqava suv\n"
+        "6. ♨️ Issiq suv va isitish tizimi\n"
+        "7. 🏠 Mening uyim (JEK)\n"
+        "8. 🪪 IIV — propiska (uyda ro'yxatda turgan shaxslar, shu jumladan voyaga yetmaganlar)\n"
+        "9. 🗑 Toza hudud — chiqindi\n\n"
+        f"💳 <b>Xizmat narxi: {NOTARY_FEE}</b>\n\n"
+        "📎 Hujjatlarning <b>sifatli rasmini</b> yuboring:\n\n"
+        "1️⃣ Egalik huquqini tasdiqlovchi hujjat <i>(oldi-sotdi, meros yoki boshqa)</i>\n"
+        "2️⃣ Kadastr ko'chirmasi\n"
+        "3️⃣ Mulkdorning pasporti yoki ID kartasi <i>(oldi-orqa tomoni)</i>\n\n"
+        "─────────────────────\n"
+        "✅ Ushbu tekshiruv orqali notariusga borishdan oldin barcha xatarlarni kamaytirasiz.",
+        reply_markup=cancel_kb(),
+        parse_mode="HTML",
+    )
+    await state.update_data(doc_type="savdo", doc_label="📄 Uy oldi-sottisi shartnomasi")
+    await state.set_state(NotaryStates.upload_doc)
+
+
+@router.callback_query(NotaryStates.doc_type, F.data.startswith("nt_dt:"))
+async def notary_doc_type(cb: CallbackQuery, state: FSMContext):
+    key = cb.data.split(":")[1]
+    label = DOC_TYPES.get(key, "Hujjat")
+    await state.update_data(doc_type=key, doc_label=label)
+    await cb.message.edit_text(
+        f"✅ Tanlandi: <b>{label}</b>\n\n"
+        "📎 Endi hujjatni (pasport, guvohnoma yoki shartnoma) "
+        "<b>rasm yoki fayl</b> ko'rinishida yuboring:",
+        parse_mode="HTML",
+    )
+    await cb.message.answer("Bekor qilish uchun:", reply_markup=cancel_kb())
+    await state.set_state(NotaryStates.upload_doc)
+    await cb.answer()
+
+
+# ── Hujjat yuklanishi (debounce — oxirgi rasmdan 3 sek keyin) ─
+@router.message(NotaryStates.upload_doc, F.photo | F.document)
+async def notary_got_doc(msg: Message, state: FSMContext):
+    if msg.photo:
+        file_id = msg.photo[-1].file_id
+    elif msg.document:
+        file_id = msg.document.file_id
+    else:
+        return
+
+    data = await state.get_data()
+    doc_files = data.get("doc_files") or []
+    doc_files.append(file_id)
+    await state.update_data(doc_files=doc_files, doc_file_id=doc_files[0])
+
+    user_id = msg.from_user.id
+
+    # Oldingi taymerini bekor qil
+    if user_id in _doc_timers:
+        _doc_timers[user_id].cancel()
+
+    # 3 soniya kutib, xabar yuborish
+    async def _send_payment_prompt():
+        await asyncio.sleep(3)
+        count = len(doc_files)
+        await msg.answer(
+            f"✅ <b>{count} ta hujjat qabul qilindi!</b>\n\n"
+            f"💳 Endi to'lovni amalga oshiring:\n\n"
+            f"📲 Karta raqami:\n<code>{NOTARY_CARD}</code>\n\n"
+            f"Miqdor: <b>{NOTARY_FEE}</b>\n\n"
+            "To'lovdan so'ng chekni <b>(rasm yoki screenshot)</b> yuboring 👇",
+            parse_mode="HTML",
+        )
+        await state.set_state(NotaryStates.upload_pay)
+        _doc_timers.pop(user_id, None)
+
+    task = asyncio.create_task(_send_payment_prompt())
+    _doc_timers[user_id] = task
+
+
+@router.message(NotaryStates.upload_doc)
+async def notary_doc_wrong(msg: Message):
+    if msg.text == "❌ Bekor qilish":
+        return
+    await msg.answer("📎 Iltimos, hujjat rasmi yoki faylini yuboring.")
+
+
+# ── To'lov cheki ─────────────────────────────────────────────
+@router.message(NotaryStates.upload_pay, F.photo | F.document)
+async def notary_got_payment(msg: Message, state: FSMContext):
+    if msg.photo:
+        file_id = msg.photo[-1].file_id
+    elif msg.document:
+        file_id = msg.document.file_id
+    else:
+        await msg.answer("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
+        return
+
+    await state.update_data(payment_file_id=file_id)
+    data = await state.get_data()
+
+    await msg.answer(
+        "✅ <b>To'lov cheki qabul qilindi!</b>\n\n"
+        f"📋 Hujjat turi: <b>{data.get('doc_label', '')}</b>\n"
+        f"💳 To'lov: <b>{NOTARY_FEE}</b>\n\n"
+        "Zayavkani notariusga yuboraylikmi?",
+        reply_markup=notary_confirm_kb(),
+        parse_mode="HTML",
+    )
+    await state.set_state(NotaryStates.confirm)
+
+
+@router.message(NotaryStates.upload_pay)
+async def notary_pay_wrong(msg: Message):
+    if msg.text == "❌ Bekor qilish":
+        return
+    await msg.answer("📸 Iltimos, to'lov chekining rasmini yuboring.")
+
+
+# ── Tasdiqlash ───────────────────────────────────────────────
+@router.callback_query(NotaryStates.confirm, F.data == "nt:send")
+async def notary_send(cb: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    user = await db.get_user(cb.from_user.id)
+
+    order_id = await db.create_notary_order(
+        user_id=cb.from_user.id,
+        listing_id=data.get("listing_id"),
+        doc_file_id=data.get("doc_file_id"),
+        doc_type=data.get("doc_type"),
+    )
+    await db.set_notary_payment(order_id, data.get("payment_file_id"))
+
+    sender = f"@{cb.from_user.username}" if cb.from_user.username else f"#{cb.from_user.id}"
+    full_name = cb.from_user.full_name or ""
+
+    # Adminga xabar
+    admin_text = (
+        f"📜 <b>Yangi notariat zayavkasi #{order_id}</b>\n\n"
+        f"👤 Kimdan: {sender} | {full_name}\n"
+        f"📋 Hujjat: <b>{data.get('doc_label', '')}</b>\n"
+        f"💳 To'lov cheki: yuborilgan\n"
+        f"📅 Vaqt: {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    all_admin_ids = list(set(ADMIN_IDS + await db.get_admin_ids()))
+
+    for admin_id in all_admin_ids:
+        try:
+            # Hujjat
+            await cb.bot.send_photo(
+                admin_id,
+                photo=data["doc_file_id"],
+                caption=f"📎 Hujjat — Zayavka #{order_id}",
+            )
+            # To'lov cheki
+            await cb.bot.send_photo(
+                admin_id,
+                photo=data["payment_file_id"],
+                caption=f"💳 To'lov cheki — Zayavka #{order_id}",
+            )
+            # Asosiy xabar + tugmalar
+            await cb.bot.send_message(
+                admin_id,
+                admin_text,
+                reply_markup=admin_notary_kb(order_id),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    await cb.message.edit_text(
+        f"✅ <b>Zayavka #{order_id} yuborildi!</b>\n\n"
+        "Notarius to'lovni tekshirib, tez orada siz bilan bog'lanadi.\n\n"
+        f"📋 Zayavka raqamingiz: <b>#{order_id}</b>\n"
+        "Natija haqida bot orqali xabar beriladi.",
+        parse_mode="HTML",
+    )
+    await state.clear()
+    await cb.message.answer("Asosiy menyu:", reply_markup=main_menu_kb())
+    await cb.answer("✅ Yuborildi!")
+
+
+@router.callback_query(NotaryStates.confirm, F.data == "nt:restart")
+async def notary_restart(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await notary_start(cb.message, state)
+    await cb.answer()
+
+
+@router.callback_query(NotaryStates.confirm, F.data == "nt:cancel")
+async def notary_cancel(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_text("❌ Bekor qilindi.")
+    await cb.message.answer("Asosiy menyu:", reply_markup=main_menu_kb())
+    await cb.answer()
+
+
+# ── Admin: zayavkani ko'rib chiqish ──────────────────────────
+@router.callback_query(F.data.startswith("adm_not:"))
+async def admin_notary_action(cb: CallbackQuery):
+    parts = cb.data.split(":")
+    action   = parts[1]
+    order_id = int(parts[2])
+
+    order = await db.get_notary_order(order_id)
+    if not order:
+        await cb.answer("Zayavka topilmadi.", show_alert=True)
+        return
+
+    action_map = {
+        "approve":  ("payment_check", "✅ To'lov qabul qilindi"),
+        "process":  ("processing",    "⚙️ Jarayonga olindi"),
+        "done":     ("done",          "✔️ Bajarildi"),
+        "reject":   ("rejected",      "❌ Rad etildi"),
+    }
+
+    if action not in action_map:
+        await cb.answer()
+        return
+
+    new_status, status_text = action_map[action]
+    await db.update_notary_order(order_id, new_status,
+                                  assigned_to=cb.from_user.id)
+
+    # Foydalanuvchiga xabar
+    user_msg_map = {
+        "payment_check": (
+            f"✅ <b>Zayavka #{order_id}: to'lovingiz qabul qilindi!</b>\n\n"
+            "Hujjatingiz notariat tomonidan ko'rib chiqilmoqda."
+        ),
+        "processing": (
+            f"⚙️ <b>Zayavka #{order_id}: ishga tushdi!</b>\n\n"
+            "Notarius hujjatingizni tayyorlashni boshladi."
+        ),
+        "done": (
+            f"✅ <b>Zayavka #{order_id} bajarildi!</b>\n\n"
+            "Hujjatingiz tayyor. Notarius siz bilan bog'lanadi."
+        ),
+        "rejected": (
+            f"❌ <b>Zayavka #{order_id} rad etildi.</b>\n\n"
+            "Sabab: hujjat yoki to'lov muammosi. Qayta murojaat qiling: /notary"
+        ),
+    }
+
+    try:
+        await cb.bot.send_message(
+            order["user_id"],
+            user_msg_map.get(new_status, f"Zayavka #{order_id} yangilandi."),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await cb.message.answer(
+        f"✅ Zayavka #{order_id} → <b>{status_text}</b>",
+        parse_mode="HTML",
+    )
+    await cb.answer(status_text)

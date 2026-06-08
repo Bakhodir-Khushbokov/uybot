@@ -16,6 +16,7 @@ from aiogram.fsm.context import FSMContext
 
 from config import ADMIN_IDS
 from handlers.states import AdminStates
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from keyboards.inline import kb
 from keyboards.reply import cancel_kb, main_menu_kb, remove_kb
 import database as db
@@ -31,13 +32,14 @@ def is_admin(user_id: int) -> bool:
 # ── Admin menu keyboard ───────────────────────────────────────────
 def admin_menu_kb():
     return kb(
+        [("📋 E'lonlar",        "adm:listings"),
+         ("📊 Statistika",      "adm:stats")],
         [("🗺 Viloyat qo'sh",   "adm:add_viloyat"),
          ("🏙 Tuman qo'sh",     "adm:add_tuman")],
         [("🏘 Mahalla qo'sh",   "adm:add_mahalla"),
          ("🏢 Bino qo'sh",      "adm:add_bino")],
         [("❌ Viloyat/tuman/mahalla o'chir", "adm:del_loc")],
         [("🗑 Binoni o'chir",   "adm:del_bld")],
-        [("📊 Statistika",      "adm:stats")],
     )
 
 
@@ -521,3 +523,127 @@ async def adm_back_menu(cb: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "adm:back")
 async def adm_back(cb: CallbackQuery, state: FSMContext):
     await adm_back_menu(cb, state)
+
+
+# ── E'lonlar boshqaruvi ──────────────────────────────────────
+def listing_admin_kb(listing_id: int, status: str) -> InlineKeyboardMarkup:
+    rows = []
+    if status == "pending":
+        rows.append([
+            InlineKeyboardButton(text="✅ Faollashtir", callback_data=f"adm_lst:approve:{listing_id}"),
+            InlineKeyboardButton(text="❌ Rad et",      callback_data=f"adm_lst:reject:{listing_id}"),
+        ])
+    elif status == "active":
+        rows.append([
+            InlineKeyboardButton(text="🔒 Bloklash",   callback_data=f"adm_lst:block:{listing_id}"),
+            InlineKeyboardButton(text="🗑 O'chirish",   callback_data=f"adm_lst:delete:{listing_id}"),
+        ])
+    elif status == "blocked":
+        rows.append([
+            InlineKeyboardButton(text="🔓 Blokni olib tashla", callback_data=f"adm_lst:approve:{listing_id}"),
+            InlineKeyboardButton(text="🗑 O'chirish",           callback_data=f"adm_lst:delete:{listing_id}"),
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "adm:listings")
+async def adm_listings_menu(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        return await cb.answer("⛔️", show_alert=True)
+    await cb.message.edit_text(
+        "📋 <b>E'lonlar boshqaruvi</b>\nQaysilarini ko'rmoqchisiz?",
+        reply_markup=kb(
+            [("⏳ Kutilmoqda",  "adm_lst_filter:pending")],
+            [("✅ Faol",         "adm_lst_filter:active")],
+            [("🔒 Bloklangan",  "adm_lst_filter:blocked")],
+            [("⬅️ Ortga",       "adm:back")],
+        ),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("adm_lst_filter:"))
+async def adm_listings_list(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        return await cb.answer("⛔️", show_alert=True)
+    status = cb.data.split(":")[1]
+    listings = await db.get_listings_by_status(status, limit=10)
+    if not listings:
+        await cb.answer(f"Bu statusda e'lon yo'q.", show_alert=True)
+        return
+    await cb.answer()
+    for lst in listings:
+        loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
+        from utils.helpers import listing_full_card
+        text = f"<b>E'lon #{lst['id']}</b> | {lst.get('status','')}\n" + listing_full_card(lst, loc)
+        try:
+            await cb.message.answer_video(
+                video=lst["video_file_id"],
+                caption=text,
+                reply_markup=listing_admin_kb(lst["id"], lst.get("status", "")),
+                parse_mode="HTML",
+            )
+        except Exception:
+            await cb.message.answer(
+                text,
+                reply_markup=listing_admin_kb(lst["id"], lst.get("status", "")),
+                parse_mode="HTML",
+            )
+
+
+@router.callback_query(F.data.startswith("adm_lst:"))
+async def adm_listing_action(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        return await cb.answer("⛔️", show_alert=True)
+    parts = cb.data.split(":")
+    action = parts[1]
+    listing_id = int(parts[2])
+
+    STATUS_MAP = {
+        "approve": "active",
+        "reject":  "rejected",
+        "block":   "blocked",
+        "delete":  "deleted",
+    }
+    new_status = STATUS_MAP.get(action)
+    if new_status:
+        await db.update_listing_status(listing_id, new_status)
+
+    LABELS = {
+        "approve": "✅ Faollashtirildi",
+        "reject":  "❌ Rad etildi",
+        "block":   "🔒 Bloklandi",
+        "delete":  "🗑 O'chirildi",
+    }
+    label = LABELS.get(action, "✅")
+
+    # Sotuvchiga xabar
+    try:
+        lst = await db.get_listing(listing_id)
+        if lst:
+            msg_text = {
+                "approve": f"✅ E'lon #{listing_id} faollashtirildi! Endi qidirishda ko'rinadi.",
+                "reject":  f"❌ E'lon #{listing_id} rad etildi. Iltimos, qayta ko'rib chiqing.",
+                "block":   f"🔒 E'lon #{listing_id} bloklandi. Batafsil: @admin ga yozing.",
+                "delete":  f"🗑 E'lon #{listing_id} o'chirildi.",
+            }.get(action, "")
+            if msg_text:
+                await cb.bot.send_message(lst["seller_id"], msg_text)
+    except Exception:
+        pass
+
+    try:
+        await cb.message.edit_caption(
+            cb.message.caption + f"\n\n{label}",
+            parse_mode="HTML",
+        )
+    except Exception:
+        try:
+            await cb.message.edit_text(cb.message.text + f"\n\n{label}", parse_mode="HTML")
+        except Exception:
+            pass
+    await cb.answer(label)
+
+
+# ── Feedback (fikr/taklif/shikoyat) ─────────────────────────

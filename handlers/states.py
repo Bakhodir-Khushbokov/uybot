@@ -8,6 +8,7 @@ class RegStates(StatesGroup):
 
 
 class SellerStates(StatesGroup):
+    transaction    = State()   # sotish / arenda
     property_type  = State()
     dom_type       = State()
     # Lokatsiya
@@ -28,7 +29,12 @@ class SellerStates(StatesGroup):
     total_floors   = State()
     area           = State()
     renovation     = State()
+    balkon         = State()   # balkon o'lchami
     landmark       = State()
+    # Qo'shimcha (arenda / makler)
+    rent_for       = State()   # faqat arenda uchun: oila/chet_ellik/yigitlar/qizlar/farqi_yoq
+    jihoz          = State()   # faqat arenda uchun: jihoz tanlash (multi-select)
+    commission     = State()   # faqat makler uchun
     # Narx
     price_currency = State()
     price_amount   = State()
@@ -37,6 +43,7 @@ class SellerStates(StatesGroup):
 
 
 class BuyerStates(StatesGroup):
+    transaction     = State()   # sotish / arenda
     property_type   = State()
     location_choice = State()
     viloyat         = State()

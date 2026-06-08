@@ -1,13 +1,15 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
+from config import MEDIA_CHANNEL_ID
 from handlers.states import SellerStates
 from keyboards.inline import (
+    transaction_kb, rent_for_kb, balkon_kb, jihoz_kb, commission_kb,
     property_type_kb, dom_type_kb, viloyat_kb, tuman_kb,
-    mahalla_kb, buildings_kb, loc_confirm_kb, loc_save_kb,
+    mahalla_kb, buildings_kb, loc_confirm_kb,
     renovation_kb, currency_kb, confirm_publish_kb, listing_manage_kb,
-    xonalar_kb, floor_kb,
+    xonalar_kb, floor_kb, area_kb,
 )
 from keyboards.reply import cancel_kb, location_kb, skip_kb, main_menu_kb, remove_kb
 import database as db
@@ -16,7 +18,6 @@ from utils.helpers import (
     check_banned, listing_full_card, make_progress,
     PROPERTY_LABELS, DOM_TYPE_LABELS, RENOVATION_LABELS,
 )
-from config import DAILY_LISTING_LIMIT
 
 router = Router()
 PAGE = 8  # Mahalla per page
@@ -26,26 +27,26 @@ PAGE = 8  # Mahalla per page
 @router.message(F.text == "➕ E'lon joylash")
 async def start_listing(msg: Message, state: FSMContext):
     await state.clear()
-
-    # Kun limitini tekshirish
-    count = await db.get_daily_count(msg.from_user.id)
-    user  = await db.get_user(msg.from_user.id)
-    if user and user.get("role") != "makler" and count >= DAILY_LISTING_LIMIT:
-        await msg.answer(
-            f"❗ Bugun {DAILY_LISTING_LIMIT} ta e'lon joylash limitiga yetdingiz.\n"
-            "Ertaga qayta urinib ko'ring."
-        )
-        return
-
+    await msg.answer("Bekor qilish uchun:", reply_markup=cancel_kb())
     await msg.answer(
-        f"{make_progress(1, 6)}\n\n"
-        "🎙 _Nima sotmoqchisiz?_\n\n"
-        "Mulk turini tanlang:",
-        reply_markup=property_type_kb("pt"),
+        "🏷 *Sotasizmi yoki ijaraga berasizmi?*",
+        reply_markup=transaction_kb(),
         parse_mode="Markdown",
     )
-    await msg.answer("Bekor qilish uchun:", reply_markup=cancel_kb())
+    await state.set_state(SellerStates.transaction)
+
+
+@router.callback_query(SellerStates.transaction, F.data.startswith("trx:"))
+async def seller_transaction(cb: CallbackQuery, state: FSMContext):
+    trx = cb.data.split(":")[1]
+    await state.update_data(transaction_type=trx)
+    await cb.message.edit_text(
+        f"{make_progress(1, 6)}\n\n"
+        "🏠 Mulk turini tanlang:",
+        reply_markup=property_type_kb("pt"),
+    )
     await state.set_state(SellerStates.property_type)
+    await cb.answer()
 
 
 # ── 1. Mulk turi ─────────────────────────────────────────────
@@ -268,16 +269,17 @@ async def got_manual_location(msg: Message, state: FSMContext):
     lon = msg.location.longitude
     await state.update_data(lat=lat, lon=lon)
 
-    data = await state.get_data()
-    dom  = data.get("dom_number", "")
-    await msg.answer(
-        f"✅ Joylashuv qabul qilindi!\n\n"
-        f"*{dom}* ni bazaga saqlasinmi?\n"
-        "_(Keyingi sotuvchilar uchun avtomatik topiladi)_",
-        reply_markup=loc_save_kb(),
-        parse_mode="Markdown",
-    )
-    await state.set_state(SellerStates.loc_save)
+    # Avtomatik bazaga saqlab, so'ramasdan davom etish
+    data   = await state.get_data()
+    loc_id = data.get("location_id")
+    dom    = data.get("dom_number", "")
+    kvartal = data.get("kvartal", "")
+    if loc_id and lat and lon:
+        bid = await db.add_building(loc_id, dom, lat, lon, kvartal)
+        await state.update_data(building_id=bid)
+
+    await msg.answer("✅ Joylashuv qabul qilindi!", reply_markup=remove_kb())
+    await _ask_video(msg, state)
 
 
 @router.message(SellerStates.loc_manual)
@@ -285,30 +287,79 @@ async def loc_manual_wrong(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         return
     if msg.text == "➡️ O'tkazib yuborish":
-        # Lokatsiyasiz davom etish
         await msg.answer("Davom etamiz 👍", reply_markup=remove_kb())
         await _ask_video(msg, state)
         return
     await msg.answer("❗ Joylashuvni yuborish uchun tugmani bosing yoki o'tkazib yuboring 👇")
 
 
-@router.callback_query(SellerStates.loc_save, F.data.startswith("locsave:"))
-async def loc_save_cb(cb: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    if cb.data == "locsave:yes":
-        loc_id  = data.get("location_id")
-        dom     = data.get("dom_number", "")
-        lat     = data.get("lat")
-        lon     = data.get("lon")
-        kvartal = data.get("kvartal", "")
-        if loc_id and lat and lon:
-            bid = await db.add_building(loc_id, dom, lat, lon, kvartal)
-            await state.update_data(building_id=bid)
-        await cb.message.edit_text("✅ Bazaga saqlandi! Rahmat.")
-    else:
-        await cb.message.edit_text("Davom etamiz.")
+# ── Ortga navigatsiya ────────────────────────────────────────
+@router.callback_query(F.data.startswith("back:"))
+async def seller_back(cb: CallbackQuery, state: FSMContext):
+    target = cb.data.split(":")[1]
+    current_state = await state.get_state()
 
-    await _ask_video(cb.message, state)
+    # Faqat seller oqimida ishlaydi
+    seller_states = {s.state for s in SellerStates.__state_items__}
+    if current_state not in seller_states:
+        await cb.answer()
+        return
+
+    data = await state.get_data()
+
+    if target == "video":
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await _ask_video(cb.message, state)
+
+    elif target == "xonalar":
+        await cb.message.edit_text(
+            f"{make_progress(4, 6)}\n\n🛏 Nechta xona?",
+            reply_markup=xonalar_kb(prefix="xon"),
+        )
+        await state.set_state(SellerStates.xonalar)
+
+    elif target == "floor":
+        xon = data.get("xonalar", "?")
+        await cb.message.edit_text(
+            f"🛏 Xonalar: {xon} ta ✅\n\n🏗 Nechanchi qavatda?",
+            reply_markup=floor_kb(prefix="fl"),
+        )
+        await state.set_state(SellerStates.floor)
+
+    elif target == "total_floors":
+        floor = data.get("floor", "?")
+        await cb.message.edit_text(
+            f"🏗 Qavat: {floor} ✅\n\n🏢 Bino jami necha qavatli?",
+            reply_markup=floor_kb(prefix="tf"),
+        )
+        await state.set_state(SellerStates.total_floors)
+
+    elif target == "area":
+        total = data.get("total_floors", "?")
+        await cb.message.edit_text(
+            f"🏢 Jami qavatlar: {total} ✅\n\n📐 Maydon (kv.m)?",
+            reply_markup=area_kb(prefix="area"),
+        )
+        await state.set_state(SellerStates.area)
+
+    elif target == "renovation":
+        await cb.message.edit_text("Remont turi?", reply_markup=renovation_kb())
+        await state.set_state(SellerStates.renovation)
+
+    elif target == "landmark":
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await cb.message.answer(
+            "📌 Mo'ljal (ixtiyoriy):\n"
+            "Yaqin yerda nima bor? Masalan: Korzinka yaqini, Metro...\n\n"
+            "Bilmasangiz — o'tkazib yuboring 👇",
+            reply_markup=skip_kb(),
+        )
+        await state.set_state(SellerStates.landmark)
+
+    elif target == "price_currency":
+        await cb.message.edit_text("Narx valyutasi?", reply_markup=currency_kb())
+        await state.set_state(SellerStates.price_currency)
+
     await cb.answer()
 
 
@@ -316,8 +367,7 @@ async def loc_save_cb(cb: CallbackQuery, state: FSMContext):
 async def _ask_video(msg, state: FSMContext):
     await msg.answer(
         f"{make_progress(3, 6)}\n\n"
-        "🎙 _Uyingizni 3 daqiqagacha video qilib yuboring._\n"
-        "_Telefonni yotig'icha tuting — uy kengroq ko'rinadi._\n\n"
+        "🎙 _Uyingizni 3 daqiqagacha video qilib yuboring._\n\n"
         "📹 Video yuboring:",
         reply_markup=cancel_kb(),
         parse_mode="Markdown",
@@ -347,7 +397,22 @@ async def got_video(msg: Message, state: FSMContext):
             )
             return
 
-    await state.update_data(video_file_id=v.file_id)
+    # Videoni media kanalga forward qilib, doimiy file_id olish
+    permanent_file_id = v.file_id  # fallback
+    if MEDIA_CHANNEL_ID:
+        try:
+            sent = await msg.bot.forward_message(
+                chat_id=MEDIA_CHANNEL_ID,
+                from_chat_id=msg.chat.id,
+                message_id=msg.message_id,
+            )
+            if sent.video:
+                permanent_file_id = sent.video.file_id
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Media kanalga forward qilishda xato: {e}")
+
+    await state.update_data(video_file_id=permanent_file_id)
     await wait.delete()
     await msg.answer("✅ Video qabul qilindi!")
     await _ask_xonalar(msg, state)
@@ -374,12 +439,9 @@ async def _ask_xonalar(msg, state: FSMContext):
 async def seller_xonalar(cb: CallbackQuery, state: FSMContext):
     val = cb.data.split(":")[1]
 
-    if val == "more":
-        await cb.message.edit_reply_markup(reply_markup=xonalar_kb(prefix="xon", extended=True))
-        await cb.answer()
-        return
-    if val == "less":
-        await cb.message.edit_reply_markup(reply_markup=xonalar_kb(prefix="xon", extended=False))
+    if val.startswith("p"):
+        page = int(val[1:])
+        await cb.message.edit_reply_markup(reply_markup=xonalar_kb(prefix="xon", page=page))
         await cb.answer()
         return
 
@@ -398,12 +460,9 @@ async def seller_xonalar(cb: CallbackQuery, state: FSMContext):
 async def seller_floor(cb: CallbackQuery, state: FSMContext):
     val = cb.data.split(":")[1]
 
-    if val == "more":
-        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="fl", extended=True))
-        await cb.answer()
-        return
-    if val == "less":
-        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="fl", extended=False))
+    if val.startswith("p"):
+        page = int(val[1:])
+        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="fl", page=page))
         await cb.answer()
         return
 
@@ -422,26 +481,49 @@ async def seller_floor(cb: CallbackQuery, state: FSMContext):
 async def seller_total_floors(cb: CallbackQuery, state: FSMContext):
     val = cb.data.split(":")[1]
 
-    if val == "more":
-        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="tf", extended=True))
-        await cb.answer()
-        return
-    if val == "less":
-        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="tf", extended=False))
+    if val.startswith("p"):
+        page = int(val[1:])
+        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="tf", page=page))
         await cb.answer()
         return
 
     total = int(val)
     await state.update_data(total_floors=total)
     await cb.message.edit_text(
-        f"🏢 Jami qavatlar: {total} ✅\n\n📐 Maydon (kv.m)?\nRaqam yozing, masalan: 72",
+        f"🏢 Jami qavatlar: {total} ✅\n\n📐 Maydon (kv.m)?",
+        reply_markup=area_kb(prefix="area"),
     )
     await state.set_state(SellerStates.area)
     await cb.answer()
 
 
+@router.callback_query(SellerStates.area, F.data.startswith("area:"))
+async def seller_area_cb(cb: CallbackQuery, state: FSMContext):
+    val = cb.data.split(":")[1]
+
+    if val.startswith("p"):
+        page = int(val[1:])
+        await cb.message.edit_reply_markup(reply_markup=area_kb(prefix="area", page=page))
+        await cb.answer()
+        return
+
+    if val == "manual":
+        await cb.message.edit_text("📐 Maydonni yozing (kv.m):\nMasalan: 72")
+        await cb.answer()
+        return
+
+    area = float(val)
+    await state.update_data(area=area)
+    await cb.message.edit_text(
+        f"📐 Maydon: {int(area)} m² ✅\n\nRemont turi?",
+        reply_markup=renovation_kb(),
+    )
+    await state.set_state(SellerStates.renovation)
+    await cb.answer()
+
+
 @router.message(SellerStates.area)
-async def seller_area(msg: Message, state: FSMContext):
+async def seller_area_msg(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         return
     try:
@@ -460,9 +542,22 @@ async def seller_area(msg: Message, state: FSMContext):
 async def seller_renovation(cb: CallbackQuery, state: FSMContext):
     renov = cb.data.split(":")[1]
     await state.update_data(renovation=renov)
-    await cb.message.edit_reply_markup(reply_markup=None)   # inline tugmalarni yopish
+    await cb.message.edit_text(
+        "🏗 *Balkon bormi?*\nO'lchamini tanlang:",
+        reply_markup=balkon_kb(),
+        parse_mode="Markdown",
+    )
+    await state.set_state(SellerStates.balkon)
+    await cb.answer()
+
+
+@router.callback_query(SellerStates.balkon, F.data.startswith("blk:"))
+async def seller_balkon(cb: CallbackQuery, state: FSMContext):
+    val = cb.data.split(":")[1]
+    await state.update_data(balkon=None if val == "yoq" else val)
+    await cb.message.edit_reply_markup(reply_markup=None)
     await cb.message.answer(
-        "📌 Oriëntir (ixtiyoriy):\n"
+        "📌 Mo'ljal (ixtiyoriy):\n"
         "Yaqin yerda nima bor? Masalan: Korzinka yaqini, Metro, Maktab...\n\n"
         "Bilmasangiz — o'tkazib yuboring 👇",
         reply_markup=skip_kb(),
@@ -480,26 +575,98 @@ async def seller_landmark(msg: Message, state: FSMContext):
         return
     landmark = "" if msg.text.strip() in ("➡️ O'tkazib yuborish", "O'tkazib yuborish") else msg.text.strip()
     await state.update_data(landmark=landmark)
-    await msg.answer("Narx valyutasi?", reply_markup=currency_kb())
+
+    data = await state.get_data()
+    user = await db.get_user(msg.from_user.id)
+    role = user.get("role", "") if user else ""
+
+    # Arenda → jihoz so'raymiz
+    if data.get("transaction_type") == "arenda":
+        await msg.answer(
+            "🛋 *Uyda nima bor? Jihoz tanlang:*\n_(Bir nechta tanlash mumkin)_",
+            reply_markup=jihoz_kb(set()),
+            parse_mode="Markdown",
+        )
+        await state.update_data(jihoz_selected=[])
+        await state.set_state(SellerStates.jihoz)
+    # Makler → komisyon so'raymiz
+    elif role == "makler":
+        await msg.answer(
+            "💼 *Vositachilik haqi bormi?*",
+            reply_markup=commission_kb(),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.commission)
+    else:
+        await msg.answer("Narx valyutasi?", reply_markup=currency_kb())
+        await state.set_state(SellerStates.price_currency)
+
+
+@router.callback_query(SellerStates.jihoz, F.data.startswith("jh:"))
+async def seller_jihoz(cb: CallbackQuery, state: FSMContext):
+    val = cb.data.split(":")[1]
+    data = await state.get_data()
+    selected = set(data.get("jihoz_selected") or [])
+
+    if val == "done":
+        import json
+        await state.update_data(jihoz=json.dumps(list(selected), ensure_ascii=False))
+        user = await db.get_user(cb.from_user.id)
+        role = user.get("role", "") if user else ""
+        if role == "makler":
+            await cb.message.edit_text(
+                "💼 *Vositachilik haqi bormi?*",
+                reply_markup=commission_kb(),
+                parse_mode="Markdown",
+            )
+            await state.set_state(SellerStates.commission)
+        else:
+            await cb.message.edit_reply_markup(reply_markup=None)
+            await cb.message.answer("Narx valyutasi?", reply_markup=currency_kb())
+            await state.set_state(SellerStates.price_currency)
+    else:
+        if val in selected:
+            selected.remove(val)
+        else:
+            selected.add(val)
+        await state.update_data(jihoz_selected=list(selected))
+        await cb.message.edit_reply_markup(reply_markup=jihoz_kb(selected))
+
+    await cb.answer()
+
+
+@router.callback_query(SellerStates.commission, F.data.startswith("com:"))
+async def seller_commission(cb: CallbackQuery, state: FSMContext):
+    await state.update_data(has_commission=(cb.data == "com:yes"))
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await cb.message.answer("Narx valyutasi?", reply_markup=currency_kb())
     await state.set_state(SellerStates.price_currency)
+    await cb.answer()
 
 
 @router.callback_query(SellerStates.price_currency, F.data.startswith("cur:"))
 async def seller_currency(cb: CallbackQuery, state: FSMContext):
     cur = cb.data.split(":")[1]
     await state.update_data(price_currency=cur)
+    data = await state.get_data()
+
+    await _ask_price_amount(cb.message, state, cur)
+    await cb.answer()
+
+
+async def _ask_price_amount(msg, state: FSMContext, cur: str):
     if cur == "usd":
-        hint = "_Masalan: 47.500 (47 ming 500 dollar)_"
+        hint = "_Masalan: 500 (500 dollar)_"
     else:
-        hint = "_Masalan: 350 (350 million so'm)_"
-    await cb.message.edit_text(
-        f"Narxni kiriting:\n{hint}",
+        hint = "_Masalan: 3 (3 million so'm)_"
+
+    await msg.edit_text(
+        f"💰 Narxni kiriting:\n{hint}",
         reply_markup=None,
         parse_mode="Markdown",
     )
-    await cb.message.answer("👇", reply_markup=cancel_kb())
+    await msg.answer("👇", reply_markup=cancel_kb())
     await state.set_state(SellerStates.price_amount)
-    await cb.answer()
 
 
 @router.message(SellerStates.price_amount)
@@ -515,12 +682,35 @@ async def seller_price(msg: Message, state: FSMContext):
         amount = parse_price_som(msg.text)
 
     if not amount or amount <= 0:
-        await msg.answer("Kechirasiz, faqat raqam kiriting, masalan: 47.500")
+        await msg.answer("Kechirasiz, faqat raqam kiriting, masalan: 47500")
         return
 
     display = format_price(amount, cur)
     await state.update_data(price_amount=amount, price_display=display)
-    await _show_review(msg, state)
+
+    data2 = await state.get_data()
+    if data2.get("transaction_type") == "arenda":
+        await msg.answer(
+            "👥 *Ijara kimlarga mo'ljallangan?*",
+            reply_markup=rent_for_kb(),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.rent_for)
+    else:
+        await _show_review(msg, state)
+
+
+@router.callback_query(SellerStates.rent_for, F.data.startswith("rf:"))
+async def seller_rent_for(cb: CallbackQuery, state: FSMContext):
+    await state.update_data(rent_for=cb.data.split(":")[1])
+    await cb.message.edit_text(
+        "🛋 *Uyda nima bor? Jihoz tanlang:*\n_(Bir nechta tanlash mumkin)_",
+        reply_markup=jihoz_kb(set()),
+        parse_mode="Markdown",
+    )
+    await state.update_data(jihoz_selected=[])
+    await state.set_state(SellerStates.jihoz)
+    await cb.answer()
 
 
 # ── 5. Ko'rib chiqish ────────────────────────────────────────
@@ -538,19 +728,38 @@ async def _show_review(msg: Message, state: FSMContext):
     if loc:
         loc_str = f"{loc['viloyat']}, {loc['tuman']}, {loc['mahalla']}"
 
+    trx   = "🔑 Ijara" if data.get("transaction_type") == "arenda" else "🏷 Sotish"
+
     text = (
         f"{make_progress(5, 6)}\n\n"
         f"📋 *E'loningiz:*\n\n"
-        f"🏠 Tur: {ptype}" + (f" · {dtype}" if dtype else "") + "\n"
+        f"{trx} | {ptype}" + (f" · {dtype}" if dtype else "") + "\n"
         f"📹 Video: ✅\n"
     )
     if data.get("xonalar"):      text += f"🛏 Xonalar: {data['xonalar']}\n"
     if data.get("floor"):        text += f"🏗 Qavat: {data['floor']}/{data.get('total_floors')}\n"
     if data.get("area"):         text += f"📐 Maydon: {int(data['area'])} m²\n"
     if renov:                    text += f"🔨 Remont: {renov}\n"
-    if data.get("landmark"):     text += f"📌 Oriëntir: {data['landmark']}\n"
+    if data.get("balkon"):       text += f"🏗 Balkon: {data['balkon']} m\n"
+    if data.get("landmark"):     text += f"📌 Mo'ljal: {data['landmark']}\n"
     if loc_str:                  text += f"📍 {loc_str}\n"
     if data.get("price_display"):text += f"💰 Narx: *{data['price_display']}*\n"
+
+    RENT_FOR_LABELS = {
+        "oila": "👨‍👩‍👧 Oila", "chet_ellik": "🌍 Chet ellik",
+        "yigitlar": "👦 Yigitlar", "qizlar": "👧 Qizlar", "farqi_yoq": "✅ Farqi yo'q",
+    }
+    if data.get("rent_for"):
+        text += f"👥 Kimlar uchun: {RENT_FOR_LABELS.get(data['rent_for'], '')}\n"
+
+    if data.get("jihoz_selected"):
+        from keyboards.inline import JIHOZ_LIST
+        jihoz_labels = {k: v for v, k in JIHOZ_LIST}
+        names = [jihoz_labels.get(j, j) for j in data["jihoz_selected"]]
+        text += f"🛋 Jihoz: {', '.join(names)}\n"
+
+    if data.get("has_commission"):
+        text += "💼 Vositachilik haqi: ✅ Bor\n"
 
     await msg.answer(text, reply_markup=confirm_publish_kb(), parse_mode="Markdown")
     await state.set_state(SellerStates.review)
@@ -578,8 +787,13 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
         "landmark":       data.get("landmark"),
         "price_amount":   data.get("price_amount"),
         "price_currency": data.get("price_currency"),
-        "price_display":  data.get("price_display"),
-        "phone":          user.get("phone") if user else "",
+        "price_display":    data.get("price_display"),
+        "transaction_type": data.get("transaction_type", "sotish"),
+        "rent_for":         data.get("rent_for"),
+        "balkon":           data.get("balkon"),
+        "jihoz":            __import__("json").dumps(data.get("jihoz_selected") or [], ensure_ascii=False) if data.get("jihoz_selected") else None,
+        "has_commission":   data.get("has_commission", False),
+        "phone":            user.get("phone") if user else "",
     }
 
     listing_id = await db.add_listing(listing_data)
@@ -599,17 +813,57 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
             except Exception:
                 pass
 
+    from config import ADMIN_IDS
+    from keyboards.inline import kb as ikb
+
     await cb.message.edit_text(
         f"{make_progress(6, 6)}\n\n"
         f"✅ *E'lon #{listing_id} joylashtirildi!*\n\n"
         "Biz uni tekshirib chiqamiz — tez orada faollashtiriladi.",
         parse_mode="Markdown",
     )
-    await cb.message.answer(
-        "Nima qilmoqchisiz?",
-        reply_markup=main_menu_kb("seller"),
-    )
+
+    # Adminga yangi e'lon haqida xabar
+    all_admin_ids = ADMIN_IDS[:]
+    try:
+        import database as _db
+        db_admins = await _db.get_admin_ids()
+        all_admin_ids = list(set(ADMIN_IDS + db_admins))
+    except Exception:
+        pass
+
+    for admin_id in all_admin_ids:
+        try:
+            await cb.bot.send_message(
+                admin_id,
+                f"📥 <b>Yangi e'lon #{listing_id}</b>\n"
+                f"Sotuvchi: @{cb.from_user.username or cb.from_user.id}\n"
+                f"Tur: {listing_data.get('property_type')} | {listing_data.get('transaction_type')}\n"
+                f"Narx: {listing_data.get('price_display', '—')}",
+                reply_markup=ikb(
+                    [(f"✅ Faollashtirish", f"adm_lst:approve:{listing_id}"),
+                     (f"❌ Rad etish",       f"adm_lst:reject:{listing_id}")],
+                ),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    await cb.message.answer("Nima qilmoqchisiz?", reply_markup=main_menu_kb("seller"))
     await state.clear()
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("donat:"))
+async def donat_cb(cb: CallbackQuery):
+    if cb.data == "donat:yes":
+        from config import DONATION_CARD
+        await cb.message.edit_text(
+            f"💳 Karta raqami:\n\n`{DONATION_CARD}`\n\nRahmat! Sizning yordamingiz loyihani rivojlantiradi 🙏",
+            parse_mode="Markdown",
+        )
+    else:
+        await cb.message.delete()
     await cb.answer()
 
 
@@ -630,39 +884,81 @@ async def edit_listing(cb: CallbackQuery, state: FSMContext):
 
 
 # ── Mening e'lonlarim ────────────────────────────────────────
-@router.message(F.text == "📋 Mening e'lonlarim")
-async def my_listings(msg: Message, state: FSMContext):
-    await state.clear()
-    listings = await db.get_seller_listings(msg.from_user.id)
+async def _send_my_listings(chat_msg: Message, user_id: int, offset: int = 0):
+    """E'lonlarni sahifalab chiqarish."""
+    from aiogram.types import InlineKeyboardMarkup
+    listings = await db.get_seller_listings(user_id)
+
     if not listings:
-        await msg.answer(
-            "Sizda hozircha e'lonlar yo'q.\n\n"
+        await chat_msg.answer(
+            "📭 Sizda hozircha e'lonlar yo'q.\n\n"
             "E'lon joylashtirish uchun: *➕ E'lon joylash*",
             parse_mode="Markdown",
         )
         return
 
-    await msg.answer(f"📋 *Sizning e'lonlaringiz ({len(listings)} ta):*", parse_mode="Markdown")
-    for lst in listings[:5]:
+    total  = len(listings)
+    chunk  = listings[offset:offset + 5]
+    STATUS = {"active": "✅ Faol", "pending": "⏳ Kutilmoqda",
+              "sold": "🤝 Sotildi", "deleted": "❌ O'chirilgan"}
+
+    await chat_msg.answer(
+        f"📋 *Sizning e'lonlaringiz:* {total} ta\n"
+        f"_({offset+1}–{min(offset+5, total)} ko'rsatilmoqda)_",
+        parse_mode="Markdown",
+    )
+
+    for lst in chunk:
         loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
-        status_icon = {"active": "✅", "pending": "⏳", "sold": "🤝", "deleted": "❌"}.get(
-            lst.get("status", ""), "❓")
+        status_label = STATUS.get(lst.get("status", ""), "❓")
 
         text = (
-            f"{status_icon} *E'lon #{lst['id']}*\n"
+            f"{status_label} | *E'lon #{lst['id']}*\n"
             f"{listing_full_card(lst, loc)}\n\n"
-            f"👁 Ko'rishlar: {lst.get('views_count', 0)}  "
-            f"📞 Raqam: {lst.get('contact_count', 0)}"
+            f"👁 Ko'rishlar: {lst.get('views_count', 0)}   "
+            f"📞 Aloqa: {lst.get('contact_count', 0)}"
         )
+        can_manage = lst.get("status") in ("active", "pending")
+        reply_kb = listing_manage_kb(lst["id"]) if can_manage else None
+
         try:
-            await msg.answer_video(
+            await chat_msg.answer_video(
                 video=lst["video_file_id"],
                 caption=text,
-                reply_markup=listing_manage_kb(lst["id"]) if lst.get("status") == "active" else None,
+                reply_markup=reply_kb,
                 parse_mode="Markdown",
             )
         except Exception:
-            await msg.answer(text, reply_markup=listing_manage_kb(lst["id"]), parse_mode="Markdown")
+            await chat_msg.answer(text, reply_markup=reply_kb, parse_mode="Markdown")
+
+    # Paginatsiya
+    nav = []
+    if offset > 0:
+        nav.append(InlineKeyboardButton(
+            text="⬆️ Oldingi", callback_data=f"mylst:page:{offset-5}"))
+    if offset + 5 < total:
+        nav.append(InlineKeyboardButton(
+            text=f"⬇️ Ko'proq ({total - offset - 5} ta)",
+            callback_data=f"mylst:page:{offset+5}"))
+    if nav:
+        await chat_msg.answer(
+            f"_{offset+1}–{min(offset+5, total)} / {total}_",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[nav]),
+            parse_mode="Markdown",
+        )
+
+
+@router.message(F.text == "📋 Mening e'lonlarim")
+async def my_listings(msg: Message, state: FSMContext):
+    await state.clear()
+    await _send_my_listings(msg, msg.from_user.id, offset=0)
+
+
+@router.callback_query(F.data.startswith("mylst:page:"))
+async def my_listings_page(cb: CallbackQuery):
+    offset = int(cb.data.split(":")[2])
+    await cb.answer()
+    await _send_my_listings(cb.message, cb.from_user.id, offset=offset)
 
 
 # ── Sotildi / O'chirish ──────────────────────────────────────
@@ -673,11 +969,55 @@ async def manage_listing(cb: CallbackQuery):
 
     if action == "sold":
         await db.update_listing_status(listing_id, "sold")
-        await cb.message.edit_caption(
-            cb.message.caption + "\n\n✅ *SOTILDI* deb belgilandi.",
+        try:
+            await cb.message.edit_caption(
+                cb.message.caption + "\n\n✅ *SOTILDI* deb belgilandi.",
+                parse_mode="Markdown",
+            )
+        except Exception:
+            pass
+        await cb.answer("✅ Tabriklaymiz!")
+
+        # Donat taklifi
+        from config import DONATION_CARD
+        from keyboards.inline import kb as ikb
+        if DONATION_CARD:
+            await cb.message.answer(
+                "🎉 Tabriklaymiz! Uyingiz sotildi!\n\n"
+                "💛 *Loyiha rivoji uchun ixtiyoriy donat:*\n\n"
+                f"💳 `{DONATION_CARD}`\n\n"
+                "_Har qanday miqdor qabul. Rahmat!_ 🙏",
+                reply_markup=ikb(
+                    [("💳 Karta raqamini ko'rish", "donat:yes"),
+                     ("➡️ O'tkazib yuborish",       "donat:skip")],
+                ),
+                parse_mode="Markdown",
+            )
+
+        # Notariat taklifi
+        await cb.message.answer(
+            "📜 *Notariat xizmati kerakmi?*\n\n"
+            "Uy sotish shartnomasi, meros yoki boshqa hujjatlarni "
+            "notarial tasdiqlash uchun tugmani bosing:",
+            reply_markup=ikb(
+                [("📜 Uy hujjatlarini tekshirish", "lst:notary_start")],
+                [("➡️ Keyinroq",              "lst:notary_skip")],
+            ),
             parse_mode="Markdown",
         )
-        await cb.answer("✅ Tabriklaymiz!")
+    elif action == "notary_start":
+        # Notariat botini boshlash
+        from handlers.notary import notary_start
+        from aiogram.fsm.context import FSMContext
+        # FSMContext yo'q bu yerda, shuning uchun to'g'ridan-to'g'ri xabar yuboramiz
+        await cb.message.answer(
+            "📜 Notariat xizmatini boshlash uchun /notary buyrug'ini yuboring.",
+        )
+        await cb.message.delete()
+        await cb.answer()
+    elif action == "notary_skip":
+        await cb.message.delete()
+        await cb.answer()
     elif action == "del":
         await db.update_listing_status(listing_id, "deleted")
         await cb.message.edit_caption(

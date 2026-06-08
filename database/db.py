@@ -61,6 +61,11 @@ async def init_db():
             price_currency      TEXT DEFAULT 'usd',
             price_display       TEXT,
             phone               TEXT,
+            transaction_type    TEXT DEFAULT 'sotish',
+            rent_for            TEXT,
+            jihoz               TEXT,
+            balkon              TEXT,
+            has_commission      INTEGER DEFAULT 0,
             status              TEXT DEFAULT 'pending',
             views_count         INTEGER DEFAULT 0,
             contact_count       INTEGER DEFAULT 0,
@@ -109,6 +114,67 @@ async def init_db():
             count     INTEGER DEFAULT 0,
             PRIMARY KEY(user_id, date)
         );
+
+        CREATE TABLE IF NOT EXISTS reports (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id   INTEGER NOT NULL,
+            reporter_id  INTEGER NOT NULL,
+            reason       TEXT NOT NULL,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(listing_id, reporter_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_rep_listing ON reports(listing_id);
+
+        CREATE TABLE IF NOT EXISTS admins (
+            telegram_id  INTEGER PRIMARY KEY,
+            full_name    TEXT,
+            username     TEXT,
+            added_by     INTEGER,
+            added_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS feedbacks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            sender      TEXT,
+            label       TEXT,
+            text        TEXT NOT NULL,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS organizations (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            category     TEXT NOT NULL,
+            name         TEXT NOT NULL,
+            address      TEXT,
+            phone        TEXT,
+            work_hours   TEXT,
+            lat          REAL,
+            lon          REAL,
+            photo_id     TEXT,
+            description  TEXT,
+            active       INTEGER DEFAULT 1,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_org_cat ON organizations(category, active);
+
+        CREATE TABLE IF NOT EXISTS notary_orders (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL,
+            listing_id      INTEGER,
+            doc_file_id     TEXT,
+            doc_type        TEXT,
+            payment_file_id TEXT,
+            status          TEXT DEFAULT 'new',
+            assigned_to     INTEGER,
+            admin_note      TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id)     REFERENCES users(telegram_id),
+            FOREIGN KEY (listing_id)  REFERENCES listings(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_notary_user   ON notary_orders(user_id);
+        CREATE INDEX IF NOT EXISTS idx_notary_status ON notary_orders(status);
         """)
         await db.commit()
 
@@ -288,8 +354,9 @@ async def add_listing(data: dict) -> int:
             INSERT INTO listings
               (seller_id, property_type, dom_type, location_id, building_id,
                lat, lon, video_file_id, xonalar, renovation, floor, total_floors,
-               area, landmark, price_amount, price_currency, price_display, phone)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               area, landmark, price_amount, price_currency, price_display, phone,
+               transaction_type, rent_for, jihoz, balkon, has_commission)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             data["seller_id"], data["property_type"], data.get("dom_type"),
             data.get("location_id"), data.get("building_id"),
@@ -299,6 +366,9 @@ async def add_listing(data: dict) -> int:
             data.get("area"), data.get("landmark"),
             data.get("price_amount"), data.get("price_currency", "usd"),
             data.get("price_display"), data.get("phone"),
+            data.get("transaction_type", "sotish"), data.get("rent_for"),
+            data.get("jihoz"), data.get("balkon"),
+            1 if data.get("has_commission") else 0,
         ))
         await db.commit()
         return cur.lastrowid
@@ -330,19 +400,22 @@ async def update_listing_status(listing_id: int, status: str):
 
 async def search_listings(property_type: str, location_id: int = None,
                           xonalar: int = None, dom_type: str = None,
-                          renovation: str = None, limit: int = 10, offset: int = 0) -> list[dict]:
+                          renovation: str = None, transaction_type: str = None,
+                          limit: int = 10, offset: int = 0) -> list[dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         conditions = ["status='active'", "property_type=?"]
         params: list = [property_type]
         if location_id:
-            conditions.append("location_id=?");  params.append(location_id)
+            conditions.append("location_id=?");       params.append(location_id)
         if xonalar:
-            conditions.append("xonalar=?");       params.append(xonalar)
+            conditions.append("xonalar=?");            params.append(xonalar)
         if dom_type:
-            conditions.append("dom_type=?");      params.append(dom_type)
+            conditions.append("dom_type=?");           params.append(dom_type)
         if renovation:
-            conditions.append("renovation=?");    params.append(renovation)
+            conditions.append("renovation=?");         params.append(renovation)
+        if transaction_type:
+            conditions.append("transaction_type=?");   params.append(transaction_type)
         where = " AND ".join(conditions)
         params += [limit, offset]
         cur = await db.execute(
@@ -469,11 +542,17 @@ async def save_subscription(user_id: int, filter_params: dict):
 
 async def get_stats() -> dict:
     async with aiosqlite.connect(DB_PATH) as db:
-        users     = (await (await db.execute("SELECT COUNT(*) FROM users")).fetchone())[0]
-        listings  = (await (await db.execute("SELECT COUNT(*) FROM listings")).fetchone())[0]
-        locations = (await (await db.execute("SELECT COUNT(*) FROM locations")).fetchone())[0]
-        buildings = (await (await db.execute("SELECT COUNT(*) FROM buildings")).fetchone())[0]
-    return {"users": users, "listings": listings, "locations": locations, "buildings": buildings}
+        users    = (await (await db.execute("SELECT COUNT(*) FROM users")).fetchone())[0]
+        listings = (await (await db.execute("SELECT COUNT(*) FROM listings")).fetchone())[0]
+        active   = (await (await db.execute("SELECT COUNT(*) FROM listings WHERE status='active'")).fetchone())[0]
+        pending  = (await (await db.execute("SELECT COUNT(*) FROM listings WHERE status='pending'")).fetchone())[0]
+        locs     = (await (await db.execute("SELECT COUNT(*) FROM locations")).fetchone())[0]
+        blds     = (await (await db.execute("SELECT COUNT(*) FROM buildings")).fetchone())[0]
+    return {
+        "users": users, "listings": listings,
+        "active_listings": active, "pending_listings": pending,
+        "locations": locs, "buildings": blds,
+    }
 
 
 async def get_matching_subscribers(listing: dict) -> list[int]:
@@ -494,3 +573,274 @@ async def get_matching_subscribers(listing: dict) -> list[int]:
             continue
         matches.append(user_id)
     return matches
+
+
+# ─────────────────────────────────────────────────────────────
+#  Reports
+# ─────────────────────────────────────────────────────────────
+async def add_report(listing_id: int, reporter_id: int, reason: str) -> dict:
+    """
+    Shikoyat qo'shadi.
+    Qaytaradi: {"added": bool, "total": int}
+    added=False → bu odam allaqachon shikoyat qilgan
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute(
+                "INSERT INTO reports (listing_id, reporter_id, reason) VALUES (?,?,?)",
+                (listing_id, reporter_id, reason),
+            )
+            await db.commit()
+        except Exception:
+            return {"added": False, "total": await _report_count(db, listing_id)}
+
+        total = await _report_count(db, listing_id)
+
+        # 5 ta yetsa → avtomatik bloklash
+        if total >= 5:
+            await db.execute(
+                "UPDATE listings SET status='blocked' WHERE id=?", (listing_id,)
+            )
+            await db.commit()
+
+        return {"added": True, "total": total}
+
+
+async def _report_count(db, listing_id: int) -> int:
+    cur = await db.execute(
+        "SELECT COUNT(*) FROM reports WHERE listing_id=?", (listing_id,)
+    )
+    row = await cur.fetchone()
+    return row[0] if row else 0
+
+
+async def get_report_count(listing_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        return await _report_count(db, listing_id)
+
+
+async def get_reports_for_listing(listing_id: int) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM reports WHERE listing_id=? ORDER BY created_at DESC",
+            (listing_id,),
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def get_listings_by_status(status: str, limit: int = 10) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM listings WHERE status=? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+
+# ─────────────────────────────────────────────────────────────
+#  Admins
+# ─────────────────────────────────────────────────────────────
+async def get_admin_ids() -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("SELECT telegram_id FROM admins")
+        rows = await cur.fetchall()
+        return [r[0] for r in rows]
+
+async def get_all_admins() -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM admins ORDER BY added_at")
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+async def add_admin(telegram_id: int, full_name: str = "", username: str = "", added_by: int = 0):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO admins (telegram_id, full_name, username, added_by) VALUES (?,?,?,?)",
+            (telegram_id, full_name, username, added_by),
+        )
+        await db.commit()
+
+async def remove_admin(telegram_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM admins WHERE telegram_id=?", (telegram_id,))
+        await db.commit()
+
+async def get_feedback_list(limit: int = 20) -> list[dict]:
+    """Oxirgi feedback xabarlari (search_history dan emas, alohida jadvaldan agar bo'lsa)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        try:
+            cur = await db.execute(
+                "SELECT * FROM feedbacks ORDER BY created_at DESC LIMIT ?", (limit,)
+            )
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+
+# ─────────────────────────────────────────────────────────────
+#  Organizations
+# ─────────────────────────────────────────────────────────────
+async def get_org_categories() -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT DISTINCT category FROM organizations WHERE active=1 ORDER BY category"
+        )
+        rows = await cur.fetchall()
+        return [r[0] for r in rows]
+
+
+async def get_orgs_by_category(category: str) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM organizations WHERE category=? AND active=1 ORDER BY name",
+            (category,),
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def get_org(org_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM organizations WHERE id=?", (org_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def add_org(data: dict) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """INSERT INTO organizations
+               (category, name, address, phone, work_hours, lat, lon, photo_id, description)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (data.get("category"), data.get("name"), data.get("address"),
+             data.get("phone"), data.get("work_hours"),
+             data.get("lat"), data.get("lon"),
+             data.get("photo_id"), data.get("description")),
+        )
+        await db.commit()
+        return cur.lastrowid
+
+
+async def update_org(org_id: int, data: dict):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """UPDATE organizations SET
+               category=COALESCE(?,category), name=COALESCE(?,name),
+               address=COALESCE(?,address), phone=COALESCE(?,phone),
+               work_hours=COALESCE(?,work_hours), photo_id=COALESCE(?,photo_id),
+               description=COALESCE(?,description), active=COALESCE(?,active)
+               WHERE id=?""",
+            (data.get("category"), data.get("name"), data.get("address"),
+             data.get("phone"), data.get("work_hours"),
+             data.get("photo_id"), data.get("description"),
+             data.get("active"), org_id),
+        )
+        await db.commit()
+
+
+async def delete_org(org_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE organizations SET active=0 WHERE id=?", (org_id,))
+        await db.commit()
+
+
+async def get_all_orgs(limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM organizations ORDER BY category, name LIMIT ?", (limit,)
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+
+# ─────────────────────────────────────────────────────────────
+#  Notary orders
+# ─────────────────────────────────────────────────────────────
+async def create_notary_order(user_id: int, listing_id: int | None,
+                               doc_file_id: str, doc_type: str) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "INSERT INTO notary_orders (user_id, listing_id, doc_file_id, doc_type) VALUES (?,?,?,?)",
+            (user_id, listing_id, doc_file_id, doc_type),
+        )
+        await db.commit()
+        return cur.lastrowid
+
+
+async def set_notary_payment(order_id: int, payment_file_id: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE notary_orders SET payment_file_id=?, status='payment_check', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (payment_file_id, order_id),
+        )
+        await db.commit()
+
+
+async def get_notary_order(order_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM notary_orders WHERE id=?", (order_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def get_notary_orders(status: str = None, assigned_to: int = None,
+                             limit: int = 20) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        clauses, params = [], []
+        if status:
+            clauses.append("status=?"); params.append(status)
+        if assigned_to:
+            clauses.append("assigned_to=?"); params.append(assigned_to)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        cur = await db.execute(
+            f"SELECT * FROM notary_orders {where} ORDER BY created_at DESC LIMIT ?",
+            params + [limit],
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def update_notary_order(order_id: int, status: str,
+                               assigned_to: int = None, admin_note: str = None):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """UPDATE notary_orders SET status=?,
+               assigned_to=COALESCE(?,assigned_to),
+               admin_note=COALESCE(?,admin_note),
+               updated_at=CURRENT_TIMESTAMP
+               WHERE id=?""",
+            (status, assigned_to, admin_note, order_id),
+        )
+        await db.commit()
+
+
+async def get_notary_stats() -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        total   = (await (await db.execute("SELECT COUNT(*) FROM notary_orders")).fetchone())[0]
+        new_    = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='new'")).fetchone())[0]
+        payment = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='payment_check'")).fetchone())[0]
+        done    = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='done'")).fetchone())[0]
+        reject  = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='rejected'")).fetchone())[0]
+    return {"total": total, "new": new_, "payment_check": payment,
+            "done": done, "rejected": reject}
+
+
+async def save_feedback(user_id: int, sender: str, label: str, text: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO feedbacks (user_id, sender, label, text) VALUES (?,?,?,?)",
+            (user_id, sender, label, text),
+        )
+        await db.commit()

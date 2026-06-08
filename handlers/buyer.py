@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 
 from handlers.states import BuyerStates
 from keyboards.inline import (
+    transaction_kb, buyer_transaction_kb,
     property_type_kb, viloyat_kb, tuman_kb, mahalla_kb,
     xonalar_kb, dom_type_filter_kb, renovation_filter_kb,
     results_nav_kb, contact_kb, kb,
@@ -26,50 +27,45 @@ async def start_search(msg: Message, state: FSMContext):
     await state.clear()
     await msg.answer(
         "🔍 <b>Qidiruv</b>\n\nNimani qidiryapsiz?",
-        reply_markup=property_type_kb("bs"),
+        reply_markup=buyer_transaction_kb(),
         parse_mode="HTML",
     )
+    await state.set_state(BuyerStates.transaction)
+
+
+@router.callback_query(BuyerStates.transaction, F.data.startswith("trx:"))
+async def buyer_transaction(cb: CallbackQuery, state: FSMContext):
+    trx = cb.data.split(":")[1]
+    await state.update_data(transaction_type=trx)
+    await cb.message.edit_text(
+        "🏠 Mulk turini tanlang:",
+        reply_markup=property_type_kb("bs"),
+    )
     await state.set_state(BuyerStates.property_type)
+    await cb.answer()
 
 
 # ── Property type ────────────────────────────────────────────────
-@router.callback_query(BuyerStates.property_type, F.data.startswith("bs:pt:"))
+@router.callback_query(BuyerStates.property_type, F.data.startswith("bs:"))
 async def buyer_property_type(cb: CallbackQuery, state: FSMContext):
-    pt = cb.data.split(":")[2]
+    pt = cb.data.split(":")[1]
     await state.update_data(property_type=pt)
-    await cb.message.edit_text(
-        "📍 Qayerdan qidiramiz?\n\nViloyatni tanlang yoki butun Uzbekiston bo'ylab qidiring.",
-        reply_markup=_location_choice_kb(),
-    )
-    await state.set_state(BuyerStates.location_choice)
-    await cb.answer()
-
-
-def _location_choice_kb():
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Butun O'zbekiston", callback_data="bc:loc:all")],
-        [InlineKeyboardButton(text="📍 Viloyat tanlash",   callback_data="bc:loc:pick")],
-        [InlineKeyboardButton(text="❌ Bekor qilish",       callback_data="bc:cancel")],
-    ])
-
-
-@router.callback_query(BuyerStates.location_choice, F.data == "bc:loc:all")
-async def buyer_loc_all(cb: CallbackQuery, state: FSMContext):
-    await state.update_data(location_id=None)
-    await _ask_xonalar(cb.message, state, edit=True)
-    await cb.answer()
-
-
-@router.callback_query(BuyerStates.location_choice, F.data == "bc:loc:pick")
-async def buyer_loc_pick(cb: CallbackQuery, state: FSMContext):
     viloyatlar = await db.get_viloyatlar()
+    sorted_vils = _sort_viloyatlar(viloyatlar)
     await cb.message.edit_text(
-        "🗺 Viloyatni tanlang:",
-        reply_markup=viloyat_kb(viloyatlar, "bv"),
+        "📍 Viloyatni tanlang:",
+        reply_markup=viloyat_kb(sorted_vils, "bv"),
     )
     await state.set_state(BuyerStates.viloyat)
     await cb.answer()
+
+
+def _sort_viloyatlar(viloyatlar: list[str]) -> list[str]:
+    """Toshkent shahri 1-chi, Toshkent viloyati 2-chi, qolganlari alifbo."""
+    priority = ["Toshkent shahri", "Toshkent viloyati"]
+    top    = [v for v in priority if v in viloyatlar]
+    rest   = sorted([v for v in viloyatlar if v not in priority])
+    return top + rest
 
 
 @router.callback_query(BuyerStates.location_choice, F.data == "bc:cancel")
@@ -86,12 +82,11 @@ async def buyer_cancel_cb(cb: CallbackQuery, state: FSMContext):
 @router.callback_query(BuyerStates.viloyat, F.data.startswith("bv:"))
 async def buyer_viloyat(cb: CallbackQuery, state: FSMContext):
     action = cb.data.split(":")[1]
-    if action == "back":
-        await cb.message.edit_text(
-            "📍 Qayerdan qidiramiz?",
-            reply_markup=_location_choice_kb(),
-        )
-        await state.set_state(BuyerStates.location_choice)
+
+    # Butun O'zbekiston
+    if action == "__all__":
+        await state.update_data(location_id=None, viloyat=None)
+        await _ask_xonalar(cb.message, state, edit=True)
         await cb.answer()
         return
 
@@ -263,6 +258,7 @@ async def _show_results(msg, state, offset=0, edit=False):
         xonalar=data.get("xonalar"),
         dom_type=data.get("dom_type"),
         renovation=data.get("renovation"),
+        transaction_type=data.get("transaction_type"),
         limit=PER_PAGE,
         offset=offset,
     )
@@ -290,32 +286,49 @@ async def _show_results(msg, state, offset=0, edit=False):
         xonalar=data.get("xonalar"),
         dom_type=data.get("dom_type"),
         renovation=data.get("renovation"),
+        transaction_type=data.get("transaction_type"),
         limit=200, offset=0,
     )
     total = len(total_results)
 
-    lines = [f"🔍 <b>{total} ta e'lon topildi</b> (ko'rsatilmoqda {offset+1}–{min(offset+PER_PAGE, total)}):\n"]
-    for i, lst in enumerate(results, start=offset + 1):
-        lines.append(f"{i}. {listing_short_line(lst)}")
-
-    lines.append("\n👇 Batafsil ko'rish uchun raqamini yozing (masalan: 1)")
-
-    # Save results IDs so user can pick by number
     await state.update_data(
         result_ids=[r["id"] for r in results],
         results_offset=offset,
         results_total=total,
     )
 
-    filter_key = f"{data.get('property_type')}:{data.get('location_id')}:{data.get('xonalar')}:{data.get('dom_type')}:{data.get('renovation')}"
-    markup = results_nav_kb(offset, total, filter_key)
+    # Header xabar
+    send = msg.answer
+    await send(
+        f"🔍 <b>{total} ta e'lon topildi</b> "
+        f"({offset+1}–{min(offset+PER_PAGE, total)} ko'rsatilmoqda)",
+        parse_mode="HTML",
+    )
 
-    text = "\n".join(lines)
-    if edit:
-        await msg.edit_text(text, reply_markup=markup, parse_mode="HTML")
-    else:
-        await msg.answer(text, reply_markup=markup, parse_mode="HTML")
+    # Har bir e'lonni to'liq karta + video + lokatsiya
+    for lst in results:
+        loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
+        await db.increment_views(lst["id"])
+        card = listing_full_card(lst, loc)
+        markup = contact_kb(lst["id"])
 
+        try:
+            await msg.answer_video(
+                video=lst["video_file_id"],
+                caption=card,
+                reply_markup=markup,
+                parse_mode="Markdown",
+            )
+        except Exception:
+            await msg.answer(card, reply_markup=markup, parse_mode="Markdown")
+
+    # Navigatsiya
+    filter_key = f"{data.get('property_type')}:{data.get('location_id')}"
+    await msg.answer(
+        f"📄 <i>{offset+1}–{min(offset+PER_PAGE, total)} / {total}</i>",
+        reply_markup=results_nav_kb(offset, total, filter_key),
+        parse_mode="HTML",
+    )
     await state.set_state(BuyerStates.results)
 
     # Save to search history
@@ -420,6 +433,14 @@ async def contact_action(cb: CallbackQuery, state: FSMContext):
         phone = seller.get("phone", "—") if seller else "—"
         await db.increment_contacts(listing_id)
         await cb.answer(f"📞 {mask_phone(phone)}", show_alert=True)
+        await cb.message.answer(
+            "⚠️ <b>Ehtiyot bo'ling!</b>\n\n"
+            "🚫 Uyni <b>ko'rmasdan</b> hech qachon zalog yoki avans to'lamang\n"
+            "🎭 Firibgarlar ko'pincha arzon narx va shoshiltirish orqali aldaydi\n"
+            "📵 Bot orqali yuzaga kelgan firibgarlik uchun bot javobgar emas\n\n"
+            "🔑 Faqat uyni borib ko'rganingizdan so'ng shartnoma tuzing!",
+            parse_mode="HTML",
+        )
 
     elif action == "fav":
         await db.add_favorite(cb.from_user.id, listing_id)
@@ -436,10 +457,67 @@ async def contact_action(cb: CallbackQuery, state: FSMContext):
         await cb.answer("Joylashuv ma'lumoti mavjud emas.", show_alert=True)
 
     elif action == "report":
-        await cb.answer("Shikoyat yuborildi. Rahmat!", show_alert=True)
+        from keyboards.inline import report_reason_kb
+        await cb.message.answer(
+            "🚩 *Shikoyat sababi:*",
+            reply_markup=report_reason_kb(listing_id),
+            parse_mode="Markdown",
+        )
+        await cb.answer()
 
     else:
         await cb.answer()
+
+
+# ── Shikoyat sababi ──────────────────────────────────────────
+@router.callback_query(F.data.startswith("rep:"))
+async def report_reason_cb(cb: CallbackQuery):
+    from config import ADMIN_IDS
+    _, reason_key, lid = cb.data.split(":")
+    listing_id = int(lid)
+
+    REASONS = {
+        "firib":   "🎭 Firibgar / Soxta e'lon",
+        "narx":    "💰 Noto'g'ri narx",
+        "boshqa":  "📵 Boshqa raqam / Aloqa yo'q",
+        "takror":  "♻️ Takroriy e'lon",
+        "spam":    "🚫 Spam",
+    }
+    reason_text = REASONS.get(reason_key, reason_key)
+
+    result = await db.add_report(listing_id, cb.from_user.id, reason_text)
+
+    if not result["added"]:
+        await cb.answer("Siz bu e'longa allaqachon shikoyat qilgansiz.", show_alert=True)
+        return
+
+    total = result["total"]
+    await cb.message.edit_text(
+        f"✅ Shikoyatingiz qabul qilindi.\nSabab: {reason_text}\n\nRahmat, biz tergov qilamiz!"
+    )
+    await cb.answer()
+
+    # Adminga xabar
+    lst = await db.get_listing(listing_id)
+    reporter = cb.from_user
+    reporter_info = f"@{reporter.username}" if reporter.username else f"#{reporter.id}"
+
+    alert_text = (
+        f"🚩 <b>Shikoyat #{total}</b> | E'lon #{listing_id}\n"
+        f"Sabab: {reason_text}\n"
+        f"Kim: {reporter_info}\n"
+    )
+    if total >= 5:
+        alert_text += "\n🔴 <b>E'lon avtomatik bloklandi!</b>"
+    elif total == 3:
+        alert_text += "\n⚠️ <b>3 ta shikoyat — tekshiring!</b>"
+
+    if total >= 3:
+        for admin_id in ADMIN_IDS:
+            try:
+                await cb.bot.send_message(admin_id, alert_text, parse_mode="HTML")
+            except Exception:
+                pass
 
 
 # ── Restart search from results nav ─────────────────────────────

@@ -39,7 +39,9 @@ def main_menu_kb(role: str = "buyer") -> ReplyKeyboardMarkup:
             keyboard=[
                 [KeyboardButton(text="➕ E'lon joylash")],
                 [KeyboardButton(text="📋 Mening e'lonlarim"), KeyboardButton(text="🔍 Qidirish")],
-                [KeyboardButton(text="❤️ Sevimlilar"),        KeyboardButton(text="❓ Yordam")],
+                [KeyboardButton(text="📜 Uy hujjatlarini tekshirish"), KeyboardButton(text="🏢 Tashkilotlar")],
+                [KeyboardButton(text="❤️ Sevimlilar")],
+                [KeyboardButton(text="💬 Fikr va takliflar")],
             ],
             resize_keyboard=True,
         )
@@ -47,7 +49,9 @@ def main_menu_kb(role: str = "buyer") -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="🔍 Uy qidirish")],
             [KeyboardButton(text="❤️ Sevimlilar"), KeyboardButton(text="📂 Qidiruv tarixi")],
-            [KeyboardButton(text="➕ E'lon joylash"), KeyboardButton(text="❓ Yordam")],
+            [KeyboardButton(text="➕ E'lon joylash")],
+            [KeyboardButton(text="📜 Uy hujjatlarini tekshirish"), KeyboardButton(text="🏢 Tashkilotlar")],
+            [KeyboardButton(text="💬 Fikr va takliflar")],
         ],
         resize_keyboard=True,
     )
