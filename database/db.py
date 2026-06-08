@@ -129,6 +129,7 @@ async def init_db():
             telegram_id  INTEGER PRIMARY KEY,
             full_name    TEXT,
             username     TEXT,
+            role         TEXT DEFAULT 'admin',
             added_by     INTEGER,
             added_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -657,13 +658,44 @@ async def get_all_admins() -> list[dict]:
         rows = await cur.fetchall()
         return [dict(r) for r in rows]
 
-async def add_admin(telegram_id: int, full_name: str = "", username: str = "", added_by: int = 0):
+async def add_admin(telegram_id: int, full_name: str = "", username: str = "",
+                    added_by: int = 0, role: str = "admin"):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT OR REPLACE INTO admins (telegram_id, full_name, username, added_by) VALUES (?,?,?,?)",
-            (telegram_id, full_name, username, added_by),
+            "INSERT OR REPLACE INTO admins (telegram_id, full_name, username, role, added_by) VALUES (?,?,?,?,?)",
+            (telegram_id, full_name, username, role, added_by),
         )
         await db.commit()
+
+
+async def get_notary_admin_ids() -> list[int]:
+    """Notarius rolidagi adminlar ID lari."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT telegram_id FROM admins WHERE role='notarius'"
+        )
+        rows = await cur.fetchall()
+        return [r[0] for r in rows]
+
+
+async def get_notary_report() -> list[dict]:
+    """Har bir notarius bo'yicha zayavkalar hisoboti."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("""
+            SELECT
+                a.telegram_id, a.full_name, a.username,
+                COUNT(n.id)                                          AS total,
+                SUM(CASE WHEN n.status='done'     THEN 1 ELSE 0 END) AS done,
+                SUM(CASE WHEN n.status='rejected' THEN 1 ELSE 0 END) AS rejected,
+                SUM(CASE WHEN n.status IN('new','payment_check','processing') THEN 1 ELSE 0 END) AS active
+            FROM admins a
+            LEFT JOIN notary_orders n ON n.assigned_to = a.telegram_id
+            WHERE a.role = 'notarius'
+            GROUP BY a.telegram_id
+        """)
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
 
 async def remove_admin(telegram_id: int):
     async with aiosqlite.connect(DB_PATH) as db:

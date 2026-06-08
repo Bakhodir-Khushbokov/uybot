@@ -95,9 +95,10 @@ async def ow_admins(cb: CallbackQuery):
     rows = []
     for a in admins:
         name = a.get("full_name") or a.get("username") or str(a["telegram_id"])
+        role_icon = "📜" if a.get("role") == "notarius" else "👨‍💼"
         rows.append([
-            InlineKeyboardButton(text=f"👤 {name}", callback_data=f"ow:noop"),
-            InlineKeyboardButton(text="❌ O'chirish", callback_data=f"ow:del_admin:{a['telegram_id']}"),
+            InlineKeyboardButton(text=f"{role_icon} {name}", callback_data=f"ow:noop"),
+            InlineKeyboardButton(text="❌", callback_data=f"ow:del_admin:{a['telegram_id']}"),
         ])
     rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="ow:back")])
 
@@ -128,13 +129,21 @@ async def ow_del_admin(cb: CallbackQuery):
 async def ow_add_admin_start(cb: CallbackQuery, state: FSMContext):
     if not is_owner(cb.from_user.id): return
     await cb.message.edit_text(
-        "➕ <b>Admin qo'shish</b>\n\n"
-        "Yangi adminning <b>Telegram ID</b> raqamini yozing:\n\n"
-        "<i>ID ni bilish uchun: @userinfobot ga yozing</i>",
+        "➕ <b>Yangi xodim qo'shish</b>\n\n"
+        "Telegram ID raqamini yozing:\n"
+        "<i>ID bilish uchun: @userinfobot</i>",
         parse_mode="HTML",
     )
     await state.set_state(OwnerStates.add_admin)
     await cb.answer()
+
+
+def role_choose_kb(new_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👨‍💼 Admin",    callback_data=f"ow:role:admin:{new_id}")],
+        [InlineKeyboardButton(text="📜 Notarius",  callback_data=f"ow:role:notarius:{new_id}")],
+        [InlineKeyboardButton(text="❌ Bekor",      callback_data="ow:back")],
+    ])
 
 
 @router.message(OwnerStates.add_admin)
@@ -155,30 +164,53 @@ async def ow_add_admin(msg: Message, state: FSMContext):
         await msg.answer("Bu siz — owner siz allaqachon.")
         return
 
-    # Foydalanuvchi ma'lumotini olishga urinish
+    user = await db.get_user(new_id)
+    name = (user.get("full_name") or user.get("username") or str(new_id)) if user else str(new_id)
+    await state.update_data(pending_admin_id=new_id, pending_admin_name=name)
+
+    await msg.answer(
+        f"👤 <b>{name}</b> (ID: <code>{new_id}</code>)\n\n"
+        "Bu xodimni qaysi rolga qo'shmoqchisiz?",
+        reply_markup=role_choose_kb(new_id),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(OwnerStates.add_admin, F.data.startswith("ow:role:"))
+async def ow_role_chosen(cb: CallbackQuery, state: FSMContext):
+    if not is_owner(cb.from_user.id): return
+    parts    = cb.data.split(":")
+    role     = parts[2]
+    new_id   = int(parts[3])
+
     user = await db.get_user(new_id)
     full_name = user.get("full_name", "") if user else ""
     username  = user.get("username", "") if user else ""
 
-    await db.add_admin(new_id, full_name, username, added_by=msg.from_user.id)
+    await db.add_admin(new_id, full_name, username, added_by=cb.from_user.id, role=role)
 
-    # Yangi adminga xabar
+    role_label = "📜 Notarius" if role == "notarius" else "👨‍💼 Admin"
+    notify_text = (
+        "✅ Siz <b>notarius</b> sifatida qo'shildingiz!\n\n"
+        "Mijozlardan kelgan zayavkalar avtomatik sizga yuboriladi.\n"
+        "Faqat tugmalar orqali javob bering."
+        if role == "notarius" else
+        "✅ Siz bot <b>admini</b> sifatida qo'shildingiz!\n\n"
+        "/admin buyrug'i orqali admin panelga kiring."
+    )
     try:
-        await msg.bot.send_message(
-            new_id,
-            "✅ Siz bot admini sifatida qo'shildingiz!\n\n"
-            "/admin buyrug'i orqali admin panelga kiring.",
-        )
+        await cb.bot.send_message(new_id, notify_text, parse_mode="HTML")
     except Exception:
         pass
 
     name_display = f"@{username}" if username else (full_name or str(new_id))
-    await msg.answer(
-        f"✅ <b>{name_display}</b> admin sifatida qo'shildi!",
+    await cb.message.edit_text(
+        f"✅ <b>{name_display}</b> — {role_label} sifatida qo'shildi!",
         parse_mode="HTML",
     )
     await state.set_state(OwnerStates.menu)
-    await msg.answer("👑 Super-admin panel:", reply_markup=owner_menu_kb())
+    await cb.message.answer("👑 Super-admin panel:", reply_markup=owner_menu_kb())
+    await cb.answer()
 
 
 # ── Notariat zayavkalari ────────────────────────────────────
@@ -186,8 +218,32 @@ async def ow_add_admin(msg: Message, state: FSMContext):
 async def ow_notary(cb: CallbackQuery):
     if not is_owner(cb.from_user.id): return
 
-    nstats = await db.get_notary_stats()
-    orders = await db.get_notary_orders(limit=10)
+    nstats  = await db.get_notary_stats()
+    report  = await db.get_notary_report()
+
+    text = (
+        "📜 <b>Notariat zayavkalari — Hisobot</b>\n\n"
+        f"🆕 Yangi: <b>{nstats['new']}</b>\n"
+        f"💳 To'lov tekshiruvida: <b>{nstats['payment_check']}</b>\n"
+        f"⚙️ Jarayonda: <b>{nstats.get('processing', 0)}</b>\n"
+        f"✅ Bajarildi: <b>{nstats['done']}</b>\n"
+        f"❌ Rad etildi: <b>{nstats['rejected']}</b>\n"
+        f"📋 Jami: <b>{nstats['total']}</b>\n"
+    )
+
+    if report:
+        text += "\n👷 <b>Notariuslar bo'yicha:</b>\n"
+        for r in report:
+            name = r.get("full_name") or r.get("username") or str(r["telegram_id"])
+            text += (
+                f"\n📜 <b>{name}</b>\n"
+                f"   ⚡️ Faol: {r['active']}  ✅ Bajarildi: {r['done']}  "
+                f"❌ Rad: {r['rejected']}  📋 Jami: {r['total']}\n"
+            )
+    else:
+        text += "\n⚠️ Hali notarius qo'shilmagan."
+
+    orders = await db.get_notary_orders(limit=15)
 
     STATUS = {
         "new":           "🆕",
@@ -197,26 +253,19 @@ async def ow_notary(cb: CallbackQuery):
         "rejected":      "❌",
     }
 
-    text = (
-        "📜 <b>Notariat zayavkalari</b>\n\n"
-        f"🆕 Yangi: <b>{nstats['new']}</b>  "
-        f"💳 To'lov: <b>{nstats['payment_check']}</b>  "
-        f"✅ Bajarildi: <b>{nstats['done']}</b>\n\n"
-    )
+    if orders:
+        text += "\n\n📋 <b>So'nggi zayavkalar:</b>\n"
+        for o in orders:
+            icon = STATUS.get(o["status"], "❓")
+            text += f"{icon} <b>#{o['id']}</b> — user:{o['user_id']}\n"
 
     rows = []
     for o in orders:
-        icon   = STATUS.get(o["status"], "❓")
-        doc    = o.get("doc_type", "")
-        uid    = o.get("user_id", "")
-        oid    = o["id"]
-        text  += f"{icon} <b>#{oid}</b> — {doc} | user:{uid}\n"
-        rows.append([
-            InlineKeyboardButton(
-                text=f"{icon} #{oid} — {doc}",
-                callback_data=f"ow:not_detail:{oid}"
-            )
-        ])
+        icon = STATUS.get(o["status"], "❓")
+        rows.append([InlineKeyboardButton(
+            text=f"{icon} #{o['id']} — {o.get('doc_type','')}",
+            callback_data=f"ow:not_detail:{o['id']}"
+        )])
 
     rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="ow:back")])
     await cb.message.edit_text(

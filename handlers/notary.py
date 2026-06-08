@@ -222,46 +222,66 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
     sender = f"@{cb.from_user.username}" if cb.from_user.username else f"#{cb.from_user.id}"
     full_name = cb.from_user.full_name or ""
 
-    # Adminga xabar
-    admin_text = (
-        f"📜 <b>Yangi notariat zayavkasi #{order_id}</b>\n\n"
-        f"👤 Kimdan: {sender} | {full_name}\n"
+    import datetime
+    now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+
+    # Faqat notarius rolidagi adminlarga yuborish
+    # Agar notarius yo'q bo'lsa — super-admin va config adminlarga
+    notary_ids = await db.get_notary_admin_ids()
+    if not notary_ids:
+        notary_ids = list(set(ADMIN_IDS + await db.get_admin_ids()))
+
+    # Notariusga to'liq zayavka xabari
+    notary_text = (
+        f"📜 <b>Yangi zayavka #{order_id}</b>\n\n"
+        f"👤 Mijoz: {sender} | {full_name}\n"
         f"📋 Hujjat: <b>{data.get('doc_label', '')}</b>\n"
-        f"💳 To'lov cheki: yuborilgan\n"
-        f"📅 Vaqt: {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        f"💳 To'lov: <b>{NOTARY_FEE}</b> — chek yuborilgan\n"
+        f"📅 Vaqt: {now}\n\n"
+        "⬇️ Hujjat va to'lov cheki quyida:"
     )
 
-    all_admin_ids = list(set(ADMIN_IDS + await db.get_admin_ids()))
-
-    for admin_id in all_admin_ids:
+    for nid in notary_ids:
         try:
-            # Hujjat
-            await cb.bot.send_photo(
-                admin_id,
-                photo=data["doc_file_id"],
-                caption=f"📎 Hujjat — Zayavka #{order_id}",
-            )
+            # Barcha hujjat rasmlari
+            doc_files = data.get("doc_files") or [data.get("doc_file_id")]
+            for i, fid in enumerate(doc_files, 1):
+                await cb.bot.send_photo(
+                    nid, photo=fid,
+                    caption=f"📎 Hujjat {i}/{len(doc_files)} — Zayavka #{order_id}",
+                )
             # To'lov cheki
             await cb.bot.send_photo(
-                admin_id,
-                photo=data["payment_file_id"],
+                nid, photo=data["payment_file_id"],
                 caption=f"💳 To'lov cheki — Zayavka #{order_id}",
             )
             # Asosiy xabar + tugmalar
             await cb.bot.send_message(
-                admin_id,
-                admin_text,
+                nid, notary_text,
                 reply_markup=admin_notary_kb(order_id),
                 parse_mode="HTML",
             )
         except Exception:
             pass
 
+    # Super-adminga faqat xabar (hujjatsiz, tugmasiz) — hisobot uchun
+    owner_text = (
+        f"📊 <b>Yangi notariat zayavkasi #{order_id}</b>\n"
+        f"Mijoz: {sender} | Vaqt: {now}\n"
+        f"Notariuslarga yuborildi: {len(notary_ids)} ta"
+    )
+    from config import OWNER_IDS
+    for oid in OWNER_IDS:
+        try:
+            await cb.bot.send_message(oid, owner_text, parse_mode="HTML")
+        except Exception:
+            pass
+
     await cb.message.edit_text(
-        f"✅ <b>Zayavka #{order_id} yuborildi!</b>\n\n"
-        "Notarius to'lovni tekshirib, tez orada siz bilan bog'lanadi.\n\n"
-        f"📋 Zayavka raqamingiz: <b>#{order_id}</b>\n"
-        "Natija haqida bot orqali xabar beriladi.",
+        f"✅ <b>Zayavka #{order_id} qabul qilindi!</b>\n\n"
+        "Notarius hujjatlaringizni ko'rib chiqadi va natija haqida "
+        "bot orqali xabar beriladi.\n\n"
+        f"📋 Zayavka raqamingiz: <b>#{order_id}</b>",
         parse_mode="HTML",
     )
     await state.clear()
