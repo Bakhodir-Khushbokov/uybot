@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 
-from config import MEDIA_CHANNEL_ID
+from config import LISTINGS_CHANNEL_ID as MEDIA_CHANNEL_ID
 from handlers.states import SellerStates
 from keyboards.inline import (
     transaction_kb, rent_for_kb, balkon_kb, jihoz_kb, commission_kb,

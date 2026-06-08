@@ -22,7 +22,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command
 
 import json
-from config import ADMIN_IDS, OWNER_IDS, MEDIA_CHANNEL_ID
+from config import ADMIN_IDS, OWNER_IDS, NOTARY_CHANNEL_ID as MEDIA_CHANNEL_ID
 import database as db
 from keyboards.reply import cancel_kb, main_menu_kb
 
