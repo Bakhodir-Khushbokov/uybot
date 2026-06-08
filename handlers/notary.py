@@ -251,10 +251,44 @@ async def notary_got_payment(msg: Message, state: FSMContext):
     except Exception:
         pass
 
-    await state.update_data(payment_file_id=file_id)
-    data = await state.get_data()
+    await state.update_data(payment_file_id=file_id, payment_is_photo=bool(msg.photo))
 
-    await msg.answer(
+    # Rasmni ko'rsatib, "Bu to'lov chekimi?" deb so'raymiz
+    pay_check_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Ha, bu to'lov cheki", callback_data="nt_pay:confirm")],
+        [InlineKeyboardButton(text="🔄 Boshqa rasm yuborish", callback_data="nt_pay:retry")],
+    ])
+    if msg.photo:
+        await msg.answer_photo(
+            photo=file_id,
+            caption=(
+                "📸 <b>Siz yuborgan rasm:</b>\n\n"
+                f"Bu <b>to'lov cheki</b>mi?\n"
+                f"To'lov miqdori: <b>{NOTARY_FEE}</b> to'langanligi ko'rinishi kerak."
+            ),
+            reply_markup=pay_check_kb,
+            parse_mode="HTML",
+        )
+    else:
+        await msg.answer_document(
+            document=file_id,
+            caption=(
+                "📎 <b>Siz yuborgan fayl:</b>\n\n"
+                f"Bu <b>to'lov cheki</b>mi?\n"
+                f"To'lov miqdori: <b>{NOTARY_FEE}</b> to'langanligi ko'rinishi kerak."
+            ),
+            reply_markup=pay_check_kb,
+            parse_mode="HTML",
+        )
+    # Holatni o'zgartirmaymiz — hali upload_pay da qolamiz (confirm tugmasini kutamiz)
+
+
+@router.callback_query(NotaryStates.upload_pay, F.data == "nt_pay:confirm")
+async def notary_pay_confirmed(cb: CallbackQuery, state: FSMContext):
+    """Foydalanuvchi 'Ha, bu to'lov cheki' tugmasini bosdi."""
+    await cb.message.edit_reply_markup(reply_markup=None)
+    data = await state.get_data()
+    await cb.message.answer(
         "✅ <b>To'lov cheki qabul qilindi!</b>\n\n"
         f"📋 Hujjat turi: <b>{data.get('doc_label', '')}</b>\n"
         f"💳 To'lov: <b>{NOTARY_FEE}</b>\n\n"
@@ -263,6 +297,22 @@ async def notary_got_payment(msg: Message, state: FSMContext):
         parse_mode="HTML",
     )
     await state.set_state(NotaryStates.confirm)
+    await cb.answer()
+
+
+@router.callback_query(NotaryStates.upload_pay, F.data == "nt_pay:retry")
+async def notary_pay_retry(cb: CallbackQuery, state: FSMContext):
+    """Foydalanuvchi 'Boshqa rasm yuborish' tugmasini bosdi."""
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await state.update_data(payment_file_id=None)
+    await cb.message.answer(
+        "🔄 Iltimos, to'lov chekining to'g'ri rasmini yuboring.\n\n"
+        f"💳 Karta raqami: <code>{NOTARY_CARD}</code>\n"
+        f"💰 To'lov miqdori: <b>{NOTARY_FEE}</b>\n\n"
+        "To'lov cheki rasmida miqdor va sana ko'rinishi kerak.",
+        parse_mode="HTML",
+    )
+    await cb.answer()
 
 
 @router.message(NotaryStates.upload_pay)
