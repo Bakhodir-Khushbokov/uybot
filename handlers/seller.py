@@ -425,11 +425,45 @@ async def got_video(msg: Message, state: FSMContext):
     await _ask_xonalar(msg, state)
 
 
+@router.message(SellerStates.video, F.document)
+async def video_as_file(msg: Message):
+    await msg.answer(
+        "❗ Iltimos, videoni <b>'Video'</b> formatida yuboring\n"
+        "<i>(fayl ko'rinishida emas)</i>\n\n"
+        "Telegram da yuborishda <b>«Video»</b> ni tanlang, «File» ni emas.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(SellerStates.video, F.photo)
+async def video_as_photo(msg: Message):
+    await msg.answer(
+        "❗ Iltimos, videoni <b>'Video'</b> formatida yuboring\n"
+        "<i>(rasm ko'rinishida emas)</i>\n\n"
+        "Telefon galereyasidan videoni tanlang va <b>«Video»</b> sifatida yuboring.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(SellerStates.video, F.audio | F.voice)
+async def video_as_audio(msg: Message):
+    await msg.answer(
+        "❗ Iltimos, videoni <b>'Video'</b> formatida yuboring\n"
+        "<i>(musiqa ko'rinishida emas)</i>\n\n"
+        "Telefon galereyasidan videoni tanlang va <b>«Video»</b> sifatida yuboring.",
+        parse_mode="HTML",
+    )
+
+
 @router.message(SellerStates.video)
 async def video_wrong(msg: Message):
     if msg.text == "❌ Bekor qilish":
         return
-    await msg.answer("❗ Iltimos, *video* yuboring (rasm emas).", parse_mode="Markdown")
+    await msg.answer(
+        "❗ Iltimos, videoni <b>'Video'</b> formatida yuboring.\n\n"
+        "Telegram da yuborishda <b>«Video»</b> ni tanlang.",
+        parse_mode="HTML",
+    )
 
 
 # ── 4. Xonalar ───────────────────────────────────────────────
