@@ -147,9 +147,25 @@ async def notary_got_doc(msg: Message, state: FSMContext):
         return
 
     is_photo = bool(msg.photo)
+    ftype    = "photo" if is_photo else "document"
+
+    # Kanalga darhol saqlash
+    try:
+        import datetime
+        now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+        caption = f"📎 Hujjat | User:{msg.from_user.id} | {now}"
+        if is_photo:
+            sent = await msg.bot.send_photo(MEDIA_CHANNEL_ID, photo=file_id, caption=caption)
+            saved_fid = sent.photo[-1].file_id
+        else:
+            sent = await msg.bot.send_document(MEDIA_CHANNEL_ID, document=file_id, caption=caption)
+            saved_fid = sent.document.file_id
+    except Exception:
+        saved_fid = file_id  # fallback
+
     data = await state.get_data()
     doc_files = data.get("doc_files") or []
-    doc_files.append({"file_id": file_id, "type": "photo" if is_photo else "document"})
+    doc_files.append({"file_id": saved_fid, "type": ftype})
     await state.update_data(doc_files=doc_files, doc_file_id=doc_files[0]["file_id"])
 
     user_id = msg.from_user.id
@@ -215,6 +231,25 @@ async def notary_got_payment(msg: Message, state: FSMContext):
     else:
         await msg.answer("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
         return
+
+    # Kanalga darhol saqlash
+    try:
+        import datetime
+        now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+        if msg.photo:
+            sent = await msg.bot.send_photo(
+                MEDIA_CHANNEL_ID, photo=file_id,
+                caption=f"💳 To'lov cheki | User:{msg.from_user.id} | {now}"
+            )
+            file_id = sent.photo[-1].file_id
+        else:
+            sent = await msg.bot.send_document(
+                MEDIA_CHANNEL_ID, document=file_id,
+                caption=f"💳 To'lov cheki | User:{msg.from_user.id} | {now}"
+            )
+            file_id = sent.document.file_id
+    except Exception:
+        pass
 
     await state.update_data(payment_file_id=file_id)
     data = await state.get_data()
