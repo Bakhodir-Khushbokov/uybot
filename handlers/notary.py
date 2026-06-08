@@ -146,10 +146,11 @@ async def notary_got_doc(msg: Message, state: FSMContext):
     else:
         return
 
+    is_photo = bool(msg.photo)
     data = await state.get_data()
     doc_files = data.get("doc_files") or []
-    doc_files.append(file_id)
-    await state.update_data(doc_files=doc_files, doc_file_id=doc_files[0])
+    doc_files.append({"file_id": file_id, "type": "photo" if is_photo else "document"})
+    await state.update_data(doc_files=doc_files, doc_file_id=doc_files[0]["file_id"])
 
     user_id = msg.from_user.id
 
@@ -242,10 +243,11 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user = await db.get_user(cb.from_user.id)
 
+    first_fid = saved_doc_fids[0]["file_id"] if saved_doc_fids else data.get("doc_file_id")
     order_id = await db.create_notary_order(
         user_id=cb.from_user.id,
         listing_id=data.get("listing_id"),
-        doc_file_id=saved_doc_fids[0] if saved_doc_fids else data.get("doc_file_id"),
+        doc_file_id=first_fid,
         doc_type=data.get("doc_type"),
         doc_files_json=json.dumps(saved_doc_fids, ensure_ascii=False),
     )
@@ -258,28 +260,36 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
     now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
 
     # ── Rasmlarni kanalga saqlash ──────────────────────────────
-    doc_files      = data.get("doc_files") or [data.get("doc_file_id")]
+    raw_doc_files  = data.get("doc_files") or [{"file_id": data.get("doc_file_id"), "type": "photo"}]
     payment_fid    = data.get("payment_file_id")
     saved_doc_fids = []
 
-    for i, fid in enumerate(doc_files, 1):
+    async def _save_to_channel(fid: str, ftype: str, caption: str):
+        """Faylni kanalga yuboradi, doimiy file_id qaytaradi."""
         try:
-            sent = await cb.bot.send_photo(
-                MEDIA_CHANNEL_ID, photo=fid,
-                caption=f"📎 Hujjat {i}/{len(doc_files)} | User:{cb.from_user.id} | {now}",
-            )
-            saved_doc_fids.append(sent.photo[-1].file_id)
+            if ftype == "photo":
+                sent = await cb.bot.send_photo(MEDIA_CHANNEL_ID, photo=fid, caption=caption)
+                return sent.photo[-1].file_id
+            else:
+                sent = await cb.bot.send_document(MEDIA_CHANNEL_ID, document=fid, caption=caption)
+                return sent.document.file_id
         except Exception:
-            saved_doc_fids.append(fid)  # fallback: original file_id
+            return fid  # fallback
 
-    try:
-        pay_sent = await cb.bot.send_photo(
-            MEDIA_CHANNEL_ID, photo=payment_fid,
-            caption=f"💳 To'lov cheki | User:{cb.from_user.id} | {now}",
+    for i, item in enumerate(raw_doc_files, 1):
+        fid   = item["file_id"] if isinstance(item, dict) else item
+        ftype = item.get("type", "photo") if isinstance(item, dict) else "photo"
+        saved = await _save_to_channel(
+            fid, ftype,
+            f"📎 Hujjat {i}/{len(raw_doc_files)} | User:{cb.from_user.id} | {now}"
         )
-        saved_payment_fid = pay_sent.photo[-1].file_id
-    except Exception:
-        saved_payment_fid = payment_fid
+        saved_doc_fids.append({"file_id": saved, "type": ftype})
+
+    # To'lov cheki (doim rasm)
+    saved_payment_fid = await _save_to_channel(
+        payment_fid, "photo",
+        f"💳 To'lov cheki | User:{cb.from_user.id} | {now}"
+    )
 
     # Faqat notarius rolidagi adminlarga yuborish
     # Agar notarius yo'q bo'lsa — super-admin va config adminlarga
@@ -297,19 +307,20 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
         "⬇️ Hujjat va to'lov cheki quyida:"
     )
 
+    async def _send_file(chat_id, item, caption):
+        fid   = item["file_id"] if isinstance(item, dict) else item
+        ftype = item.get("type", "photo") if isinstance(item, dict) else "photo"
+        if ftype == "photo":
+            await cb.bot.send_photo(chat_id, photo=fid, caption=caption)
+        else:
+            await cb.bot.send_document(chat_id, document=fid, caption=caption)
+
     for nid in notary_ids:
         try:
-            # Barcha hujjat rasmlari (kanaldan saqlangan)
-            for i, fid in enumerate(saved_doc_fids, 1):
-                await cb.bot.send_photo(
-                    nid, photo=fid,
-                    caption=f"📎 Hujjat {i}/{len(saved_doc_fids)} — Zayavka #{order_id}",
-                )
-            # To'lov cheki
-            await cb.bot.send_photo(
-                nid, photo=saved_payment_fid,
-                caption=f"💳 To'lov cheki — Zayavka #{order_id}",
-            )
+            for i, item in enumerate(saved_doc_fids, 1):
+                await _send_file(nid, item, f"📎 Hujjat {i}/{len(saved_doc_fids)} — Zayavka #{order_id}")
+            await cb.bot.send_photo(nid, photo=saved_payment_fid,
+                                    caption=f"💳 To'lov cheki — Zayavka #{order_id}")
             # Asosiy xabar + tugmalar
             await cb.bot.send_message(
                 nid, notary_text,
