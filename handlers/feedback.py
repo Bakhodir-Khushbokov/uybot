@@ -14,7 +14,7 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from config import OWNER_IDS, FEEDBACK_CHANNEL_ID
+from config import OWNER_IDS, FEEDBACK_GROUP_ID, FEEDBACK_TOPICS
 from keyboards.inline import kb
 from keyboards.reply import cancel_kb, main_menu_kb
 import database as db
@@ -89,8 +89,8 @@ async def feedback_text(msg: Message, state: FSMContext):
     # DB ga saqlash
     await db.save_feedback(msg.from_user.id, sender, label, msg.text)
 
-    # Feedback kanaliga yuborish (javob tugmasi bilan)
-    channel_text = (
+    # Guruh topiciga yuborish
+    group_text = (
         f"{label}\n"
         f"👤 {sender} | {msg.from_user.full_name}\n"
         f"🕐 {now}\n\n"
@@ -102,14 +102,15 @@ async def feedback_text(msg: Message, state: FSMContext):
             callback_data=f"fb_reply:{msg.from_user.id}"
         )]
     ])
+    topic_id = FEEDBACK_TOPICS.get(ftype)
 
-    if FEEDBACK_CHANNEL_ID:
+    if FEEDBACK_GROUP_ID and topic_id:
         try:
             await msg.bot.send_message(
-                FEEDBACK_CHANNEL_ID,
-                channel_text,
+                FEEDBACK_GROUP_ID,
+                group_text,
+                message_thread_id=topic_id,
                 reply_markup=reply_btn,
-                parse_mode=None,
             )
         except Exception:
             pass

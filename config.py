@@ -12,6 +12,13 @@ LISTINGS_CHANNEL_ID = int(os.getenv("LISTINGS_CHANNEL_ID", os.getenv("MEDIA_CHAN
 NOTARY_CHANNEL_ID   = int(os.getenv("NOTARY_CHANNEL_ID",   os.getenv("MEDIA_CHANNEL_ID", "0")))
 ORGS_CHANNEL_ID      = int(os.getenv("ORGS_CHANNEL_ID",      os.getenv("MEDIA_CHANNEL_ID", "0")))
 FEEDBACK_CHANNEL_ID  = int(os.getenv("FEEDBACK_CHANNEL_ID", "0"))
+FEEDBACK_GROUP_ID    = int(os.getenv("FEEDBACK_GROUP_ID",   "0"))
+FEEDBACK_TOPICS = {
+    "fikr":    int(os.getenv("FEEDBACK_TOPIC_FIKR",     "2")),
+    "taklif":  int(os.getenv("FEEDBACK_TOPIC_TAKLIF",   "3")),
+    "shikoyat":int(os.getenv("FEEDBACK_TOPIC_SHIKOYAT", "4")),
+    "loyiha":  int(os.getenv("FEEDBACK_TOPIC_LOYIHA",   "5")),
+}
 DONATION_CARD    = os.getenv("DONATION_CARD", "")
 
 # E'lon limiti (oddiy foydalanuvchi)
