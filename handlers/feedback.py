@@ -112,8 +112,9 @@ async def feedback_text(msg: Message, state: FSMContext):
                 message_thread_id=topic_id,
                 reply_markup=reply_btn,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Guruhga yuborishda xato: {e} | group={FEEDBACK_GROUP_ID} topic={topic_id}")
 
     # Faqat ownerlarga xabar
     for owner_id in OWNER_IDS:
