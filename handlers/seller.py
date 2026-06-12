@@ -346,41 +346,61 @@ async def seller_dom_number(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         return
     dom = msg.text.strip()
+    data = await state.get_data()
+    tuman = data.get("tuman", "")
+    kvartal = data.get("kvartal", "")
+    street = data.get("street", "")
+
     await state.update_data(dom_number=dom)
 
-    data   = await state.get_data()
-    loc_id = data.get("location_id")
-
     if dom == "—":
-        # Joylashuvni qo'lda so'rash
         await _ask_manual_location(msg)
         await state.set_state(SellerStates.loc_manual)
         return
 
-    buildings = await db.find_buildings(loc_id, dom)
+    # Yangi baza: streets + addresses
+    if street:
+        coords = await db.get_address_coords(tuman, kvartal, street, dom)
+        if coords:
+            address_label = f"{tuman}, {kvartal}, {street.title()}, {dom}-uy"
+            await state.update_data(
+                mahalla_name=address_label,
+                lat=coords["lat"],
+                lon=coords["lon"],
+                location_id=None,
+            )
+            await msg.answer(
+                f"✅ Manzil saqlandi:\n<b>{address_label}</b>",
+                parse_mode="HTML",
+                reply_markup=remove_kb(),
+            )
+            await _ask_video(msg, state)
+            return
+
+    # Eski baza (buildings jadval) — fallback
+    loc_id = data.get("location_id")
+    buildings = await db.find_buildings(loc_id, dom) if loc_id else []
     if buildings:
         await state.update_data(_buildings=buildings)
         if len(buildings) == 1:
             b = buildings[0]
             await msg.answer(
-                f"✅ Bazada topildi: *{b['dom_number']}*\n"
-                f"Joylashuvni tekshiring 👇",
-                parse_mode="Markdown",
+                f"✅ Bazada topildi: <b>{b['dom_number']}</b>\nJoylashuvni tekshiring 👇",
+                parse_mode="HTML",
             )
             await msg.answer_location(latitude=b["lat"], longitude=b["lon"])
             await msg.answer("Shu to'g'ri joymiZ?", reply_markup=loc_confirm_kb(b["id"]))
         else:
             await msg.answer(
-                f"*{len(buildings)} ta mos bino topildi.* Qaysi biri?",
+                f"<b>{len(buildings)} ta mos bino topildi.</b> Qaysi biri?",
                 reply_markup=buildings_kb(buildings),
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
         await state.set_state(SellerStates.loc_found)
     else:
         await msg.answer(
-            f"❗ *«{dom}»* bazamizda topilmadi.\n\n"
-            "📍 Joylashuvni qo'lda yuboring:",
-            parse_mode="Markdown",
+            f"❗ <b>«{dom}»</b> bazamizda topilmadi.\n\n📍 Joylashuvni qo'lda yuboring:",
+            parse_mode="HTML",
         )
         await _ask_manual_location(msg)
         await state.set_state(SellerStates.loc_manual)
