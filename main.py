@@ -30,6 +30,13 @@ async def main():
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+
+    # Bot username ni watermark uchun o'rnatish
+    bot_info = await bot.get_me()
+    from utils.watermark import set_watermark_text
+    set_watermark_text(f"@{bot_info.username}")
+    logger.info(f"🖼 Watermark: @{bot_info.username}")
+
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(main_router)
 
