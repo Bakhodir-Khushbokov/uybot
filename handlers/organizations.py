@@ -17,9 +17,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command
 
-from config import ADMIN_IDS, OWNER_IDS
+from config import ADMIN_IDS, OWNER_IDS, ORGS_CHANNEL_ID
 import database as db
-from keyboards.reply import cancel_kb, main_menu_kb
+from keyboards.reply import cancel_kb, main_menu_kb, location_kb
 
 router = Router()
 
@@ -27,11 +27,6 @@ router = Router()
 ORG_CATEGORIES = {
     "kommunal":   "🏘 Kommunal xizmatlar",
     "notarius":   "📜 Notariuslar",
-    "bank":       "🏦 Banklar",
-    "makler":     "🤝 Maklerlik agentliklari",
-    "qurilish":   "🏗 Qurilish kompaniyalari",
-    "yurist":     "⚖️ Yuridik xizmatlar",
-    "boshqa":     "🏢 Boshqa tashkilotlar",
 }
 
 CAT_ICONS = {k: v.split()[0] for k, v in ORG_CATEGORIES.items()}
@@ -52,15 +47,16 @@ KOMMUNAL_TYPES = {
 
 class OrgAdminStates(StatesGroup):
     category     = State()
-    kom_viloyat  = State()   # kommunal uchun
-    kom_tuman    = State()   # kommunal uchun
-    kom_type     = State()   # kommunal uchun
+    kom_viloyat  = State()
+    kom_tuman    = State()
+    kom_type     = State()
     name         = State()
     address      = State()
     phone        = State()
     work_hours   = State()
     photo        = State()
     description  = State()
+    location     = State()
 
 
 def is_admin(user_id: int) -> bool:
@@ -499,7 +495,21 @@ async def org_admin_hours(msg: Message, state: FSMContext):
 
 @router.message(OrgAdminStates.photo, F.photo)
 async def org_admin_photo(msg: Message, state: FSMContext):
-    await state.update_data(photo_id=msg.photo[-1].file_id)
+    file_id = msg.photo[-1].file_id
+    # Kanalga yuklash
+    if ORGS_CHANNEL_ID:
+        try:
+            data_tmp = await state.get_data()
+            name_tmp = data_tmp.get("name", "Tashkilot")
+            sent = await msg.bot.send_photo(
+                ORGS_CHANNEL_ID, photo=file_id,
+                caption=f"🏢 {name_tmp}"
+            )
+            file_id = sent.photo[-1].file_id
+        except Exception:
+            pass
+
+    await state.update_data(photo_id=file_id)
     await msg.answer(
         "📝 Qisqacha tavsif yozing:\n"
         "<i>Xizmat turlari, imtiyozlar va h.k. (ixtiyoriy)</i>\n\n"
@@ -527,31 +537,64 @@ async def org_admin_description(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish": await state.clear(); return
     desc = "" if msg.text.strip().lower() == "skip" else msg.text.strip()
     await state.update_data(description=desc)
-    data = await state.get_data()
+    await msg.answer(
+        "📍 <b>Tashkilotning joylashuvini yuboring</b>\n\n"
+        "Telegram'da: 📎 → Lokatsiya → Ushbu joyni ulashish\n\n"
+        "<i>Foydalanuvchilar xaritada ko'rishi uchun kerak</i>",
+        reply_markup=location_kb(),
+        parse_mode="HTML",
+    )
+    await state.set_state(OrgAdminStates.location)
 
-    # Ko'rib chiqish
+
+@router.message(OrgAdminStates.location, F.location)
+async def org_admin_location(msg: Message, state: FSMContext):
+    await state.update_data(lat=msg.location.latitude, lon=msg.location.longitude)
+    await _show_org_preview(msg, state)
+
+
+@router.message(OrgAdminStates.location)
+async def org_admin_location_skip(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish": await state.clear(); return
+    if msg.text == "➡️ O'tkazib yuborish":
+        await _show_org_preview(msg, state)
+        return
+    await msg.answer(
+        "📍 Iltimos, lokatsiya yuboring yoki o'tkazib yuboring.",
+        reply_markup=location_kb(),
+    )
+
+
+async def _show_org_preview(msg: Message, state: FSMContext):
+    data = await state.get_data()
     cat_label = ORG_CATEGORIES.get(data.get("category", ""), "")
+    stype = data.get("service_type", "")
+    stype_label = KOMMUNAL_TYPES.get(stype, "") if stype else ""
+    has_loc = bool(data.get("lat"))
+
     preview = (
         f"📋 <b>Tekshirib ko'ring:</b>\n\n"
-        f"🏷 Kategoriya: {cat_label}\n"
+        f"🏷 Kategoriya: {cat_label}"
+        f"{f' — {stype_label}' if stype_label else ''}\n"
         f"🏢 Nom: <b>{data.get('name', '')}</b>\n"
         f"📍 Manzil: {data.get('address', '—')}\n"
         f"📞 Telefon: {data.get('phone', '—')}\n"
         f"🕐 Ish vaqti: {data.get('work_hours', '—')}\n"
-        f"🖼 Rasm: {'✅' if data.get('photo_id') else '❌'}\n"
+        f"🖼 Rasm: {'✅' if data.get('photo_id') else '—'}\n"
+        f"🗺 Xarita: {'✅' if has_loc else '—'}\n"
         f"📝 Tavsif: {data.get('description') or '—'}\n"
     )
     await msg.answer(
         preview,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Saqlash",        callback_data="orga:save")],
-            [InlineKeyboardButton(text="❌ Bekor qilish",   callback_data="orga:cancel")],
+            [InlineKeyboardButton(text="✅ Saqlash",      callback_data="orga:save")],
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="orga:cancel")],
         ]),
         parse_mode="HTML",
     )
 
 
-@router.callback_query(OrgAdminStates.description, F.data == "orga:save")
+@router.callback_query(OrgAdminStates.location, F.data == "orga:save")
 async def org_admin_save(cb: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     org_id = await db.add_org(data)
@@ -564,7 +607,7 @@ async def org_admin_save(cb: CallbackQuery, state: FSMContext):
     await cb.answer("✅ Saqlandi!")
 
 
-@router.callback_query(OrgAdminStates.description, F.data == "orga:cancel")
+@router.callback_query(OrgAdminStates.location, F.data == "orga:cancel")
 async def org_admin_cancel(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     await cb.message.edit_text("❌ Bekor qilindi.")
