@@ -1115,3 +1115,26 @@ async def manage_listing(cb: CallbackQuery):
         )
         await cb.answer("O'chirildi.")
 
+
+@router.callback_query(F.data.startswith("donate:"))
+async def donate_action(cb: CallbackQuery):
+    action = cb.data.split(":")[1]
+    if action == "show":
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        copy_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ To'lov qildim, rahmat!", callback_data="donate:done"),
+        ]])
+        await cb.message.edit_text(
+            "💳 <b>Karta raqami:</b>\n\n"
+            "<code>5614 6821 1325 6640</code>\n"
+            "<b>X.B</b>\n\n"
+            "Istalgan miqdor — katta-kichik farqi yo'q 🙏\n"
+            "Rahmat, siz tufayli loyiha davom etadi! 💚",
+            reply_markup=copy_kb,
+            parse_mode="HTML",
+        )
+    elif action in ("skip", "done"):
+        msg = "🎉 Katta rahmat! Sizning yordamingiz bilan davom etamiz! 💚" if action == "done" else "👍 Tushunarli! Yaxshi e'lonlar bilan ko'rishguncha!"
+        await cb.message.edit_text(msg, parse_mode="HTML")
+    await cb.answer()
+
