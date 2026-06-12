@@ -1094,8 +1094,24 @@ async def manage_listing(cb: CallbackQuery):
         await cb.answer()
     elif action == "del":
         await db.update_listing_status(listing_id, "deleted")
-        await cb.message.edit_caption(
-            cb.message.caption + "\n\n🗑 E'lon o'chirildi.",
-            parse_mode="Markdown",
+        try:
+            await cb.message.edit_caption(
+                (cb.message.caption or "") + "\n\n🗑 <b>E'lon o'chirildi.</b>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        donate_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="💳 Karta raqamini ko'rish", callback_data="donate:show"),
+            InlineKeyboardButton(text="🙏 Keyinroq", callback_data="donate:skip"),
+        ]])
+        await cb.message.answer(
+            "🙏 <b>Loyiha rivojiga hissa qo'shasizmi?</b>\n\n"
+            "Bu ixtiyoriy — istagan miqdorda donat qilsangiz bo'ladi.\n"
+            "Sizning yordamingiz botni yaxshilashga bevosita xizmat qiladi! 💚",
+            reply_markup=donate_kb,
+            parse_mode="HTML",
         )
         await cb.answer("O'chirildi.")
+

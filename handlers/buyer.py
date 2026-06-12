@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from handlers.states import BuyerStates
@@ -347,6 +347,11 @@ async def results_nav(cb: CallbackQuery, state: FSMContext):
         new_offset = data.get("results_offset", 0) + 5
         await _show_results(cb.message, state, offset=new_offset, edit=True)
 
+    elif action == "prev":
+        data = await state.get_data()
+        new_offset = max(0, data.get("results_offset", 0) - 5)
+        await _show_results(cb.message, state, offset=new_offset, edit=True)
+
     elif action == "new":
         await start_search(cb.message, state)
 
@@ -418,6 +423,11 @@ async def contact_action(cb: CallbackQuery, state: FSMContext):
     parts = cb.data.split(":")
     action = parts[1]
     listing_id = int(parts[2])
+
+    if action == "open":
+        await show_listing_detail(cb.message, listing_id, cb.from_user.id)
+        await cb.answer()
+        return
 
     if action == "phone":
         lst = await db.get_listing(listing_id)
