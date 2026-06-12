@@ -310,10 +310,10 @@ async def _show_results(msg, state, offset=0, edit=False):
                 video=lst["video_file_id"],
                 caption=card,
                 reply_markup=markup,
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
         except Exception:
-            await msg.answer(card, reply_markup=markup, parse_mode="Markdown")
+            await msg.answer(card, reply_markup=markup, parse_mode="HTML")
 
     # Navigatsiya
     filter_key = f"{data.get('property_type')}:{data.get('location_id')}"
@@ -454,7 +454,7 @@ async def contact_action(cb: CallbackQuery, state: FSMContext):
         await cb.message.answer(
             "🚩 *Shikoyat sababi:*",
             reply_markup=report_reason_kb(listing_id),
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
         await cb.answer()
 
