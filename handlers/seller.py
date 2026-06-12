@@ -825,48 +825,17 @@ async def _show_review(msg: Message, state: FSMContext):
     user  = await db.get_user(msg.from_user.id)
     phone = user.get("phone", "") if user else ""
 
-    ptype = PROPERTY_LABELS.get(data.get("property_type", ""), "🏠")
-    dtype = DOM_TYPE_LABELS.get(data.get("dom_type", ""), "")
-    renov = RENOVATION_LABELS.get(data.get("renovation", ""), "")
-
-    loc_str = ""
-    if loc:
-        loc_str = f"{loc['viloyat']}, {loc['tuman']}, {loc['mahalla']}"
-
-    trx   = "🔑 Ijara" if data.get("transaction_type") == "arenda" else "🏷 Sotish"
-
-    text = (
-        f"{make_progress(5, 6)}\n\n"
-        f"📋 *E'loningiz:*\n\n"
-        f"{trx} | {ptype}" + (f" · {dtype}" if dtype else "") + "\n"
-        f"📹 Video: ✅\n"
-    )
-    if data.get("xonalar"):      text += f"🛏 Xonalar: {data['xonalar']}\n"
-    if data.get("floor"):        text += f"🏗 Qavat: {data['floor']}/{data.get('total_floors')}\n"
-    if data.get("area"):         text += f"📐 Maydon: {int(data['area'])} m²\n"
-    if renov:                    text += f"🔨 Remont: {renov}\n"
-    if data.get("balkon"):       text += f"🏗 Balkon: {data['balkon']} m\n"
-    if data.get("landmark"):     text += f"📌 Mo'ljal: {data['landmark']}\n"
-    if loc_str:                  text += f"📍 {loc_str}\n"
-    if data.get("price_display"):text += f"💰 Narx: *{data['price_display']}*\n"
-
-    RENT_FOR_LABELS = {
-        "oila": "👨‍👩‍👧 Oila", "chet_ellik": "🌍 Chet ellik",
-        "yigitlar": "👦 Yigitlar", "qizlar": "👧 Qizlar", "farqi_yoq": "✅ Farqi yo'q",
-    }
-    if data.get("rent_for"):
-        text += f"👥 Kimlar uchun: {RENT_FOR_LABELS.get(data['rent_for'], '')}\n"
-
+    # listing_full_card uchun data dict ni moslashtirish
+    preview_lst = dict(data)
+    preview_lst["phone"] = phone
     if data.get("jihoz_selected"):
-        from keyboards.inline import JIHOZ_LIST
-        jihoz_labels = {k: v for v, k in JIHOZ_LIST}
-        names = [jihoz_labels.get(j, j) for j in data["jihoz_selected"]]
-        text += f"🛋 Jihoz: {', '.join(names)}\n"
+        import json as _json
+        preview_lst["jihoz"] = _json.dumps(data["jihoz_selected"])
 
-    if data.get("has_commission"):
-        text += "💼 Vositachilik haqi: ✅ Bor\n"
+    card = listing_full_card(preview_lst, loc)
+    text = f"{make_progress(5, 6)}\n\n📋 <b>E'loningiz:</b>\n\n{card}"
 
-    await msg.answer(text, reply_markup=confirm_publish_kb(), parse_mode="Markdown")
+    await msg.answer(text, reply_markup=confirm_publish_kb(), parse_mode="HTML")
     await state.set_state(SellerStates.review)
 
 
