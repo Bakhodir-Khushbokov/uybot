@@ -133,19 +133,19 @@ def kommunal_tuman_kb(tumanlar: list[str]) -> InlineKeyboardMarkup:
 @router.message(F.text == "🏢 Tashkilotlar")
 async def orgs_start(msg: Message, state: FSMContext):
     await state.clear()
-    cats = await db.get_org_categories()
-    if not cats:
+    viloyatlar = await db.get_viloyatlar()
+    if not viloyatlar:
         await msg.answer(
-            "🏢 <b>Tashkilotlar katalogi</b>\n\n"
-            "Hozircha tashkilotlar qo'shilmagan.\n"
+            "🏘 <b>Kommunal xizmatlar</b>\n\n"
+            "Hozircha ma'lumotlar qo'shilmagan.\n"
             "Tez orada to'ldiriladi!",
             parse_mode="HTML",
         )
         return
+    await state.update_data(current_category="kommunal")
     await msg.answer(
-        "🏢 <b>Tashkilotlar katalogi</b>\n\n"
-        "Kategoriyani tanlang:",
-        reply_markup=category_kb(),
+        "🏘 <b>Kommunal xizmatlar</b>\n\nViloyatni tanlang:",
+        reply_markup=kommunal_viloyat_kb(viloyatlar),
         parse_mode="HTML",
     )
 
