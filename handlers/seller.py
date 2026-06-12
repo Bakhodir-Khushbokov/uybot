@@ -1093,27 +1093,52 @@ async def manage_listing(cb: CallbackQuery):
         await cb.message.delete()
         await cb.answer()
     elif action == "del":
-        await db.update_listing_status(listing_id, "deleted")
-        try:
-            await cb.message.edit_caption(
-                (cb.message.caption or "") + "\n\n🗑 <b>E'lon o'chirildi.</b>",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        reason_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Shu bot orqali sotildi", callback_data=f"lst:sold_here:{listing_id}")],
+            [InlineKeyboardButton(text="🏠 Boshqa joydan sotildi",  callback_data=f"lst:sold_other:{listing_id}")],
+            [InlineKeyboardButton(text="❌ Sotilmadi",               callback_data=f"lst:not_sold:{listing_id}")],
+        ])
+        await cb.message.answer(
+            "📋 <b>E'lonni o'chirish sababi?</b>",
+            reply_markup=reason_kb,
+            parse_mode="HTML",
+        )
+        await cb.answer()
+
+
+@router.callback_query(F.data.startswith("lst:sold_here:") | F.data.startswith("lst:sold_other:") | F.data.startswith("lst:not_sold:"))
+async def delete_reason(cb: CallbackQuery):
+    parts = cb.data.split(":")
+    reason = parts[1]
+    listing_id = int(parts[2])
+
+    await db.update_listing_status(listing_id, "deleted")
+
+    if reason == "sold_here":
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         donate_kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="💳 Karta raqamini ko'rish", callback_data="donate:show"),
-            InlineKeyboardButton(text="🙏 Keyinroq", callback_data="donate:skip"),
+            InlineKeyboardButton(text="🙏 Keyinroq",               callback_data="donate:skip"),
         ]])
-        await cb.message.answer(
-            "🙏 <b>Loyiha rivojiga hissa qo'shasizmi?</b>\n\n"
-            "Bu ixtiyoriy — istagan miqdorda donat qilsangiz bo'ladi.\n"
-            "Sizning yordamingiz botni yaxshilashga bevosita xizmat qiladi! 💚",
+        await cb.message.edit_text(
+            "🎉 <b>Tabriklaymiz! E'loningiz muvaffaqiyatli sotildi!</b>\n\n"
+            "Loyiha rivojiga ixtiyoriy hissa qo'shasizmi?\n"
+            "Istalgan miqdor — katta-kichik farqi yo'q 💚",
             reply_markup=donate_kb,
             parse_mode="HTML",
         )
-        await cb.answer("O'chirildi.")
+    elif reason == "sold_other":
+        await cb.message.edit_text(
+            "✅ <b>E'lon o'chirildi.</b>\n\nBoshqa joydan sotilganini bildirdingiz. Keyingi safar ham botimizdan foydalaning! 🙏",
+            parse_mode="HTML",
+        )
+    else:
+        await cb.message.edit_text(
+            "✅ <b>E'lon o'chirildi.</b>\n\nOmad tilaymiz! Qaytadan e'lon joylashingiz mumkin.",
+            parse_mode="HTML",
+        )
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("donate:"))
