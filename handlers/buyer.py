@@ -290,38 +290,40 @@ async def _show_results(msg, state, offset=0, edit=False):
         results_total=total,
     )
 
-    # Header xabar
-    send = msg.answer
-    await send(
-        f"🔍 <b>{total} ta e'lon topildi</b> "
-        f"({offset+1}–{min(offset+PER_PAGE, total)} ko'rsatilmoqda)",
-        parse_mode="HTML",
-    )
+    # Qisqa ro'yxat — raqamli inline tugmalar
+    lines = [f"🔍 <b>{total} ta e'lon topildi</b> ({offset+1}–{min(offset+PER_PAGE, total)})\n"]
+    buttons = []
+    for i, lst in enumerate(results, start=offset + 1):
+        short = listing_short_line(lst)
+        lines.append(f"{i}. {short}")
+        buttons.append([InlineKeyboardButton(
+            text=f"{i}. {short}",
+            callback_data=f"cl:open:{lst['id']}"
+        )])
 
-    # Har bir e'lonni to'liq karta + video + lokatsiya
-    for lst in results:
-        loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
-        await db.increment_views(lst["id"])
-        card = listing_full_card(lst, loc)
-        markup = contact_kb(lst["id"])
-
-        try:
-            await msg.answer_video(
-                video=lst["video_file_id"],
-                caption=card,
-                reply_markup=markup,
-                parse_mode="HTML",
-            )
-        except Exception:
-            await msg.answer(card, reply_markup=markup, parse_mode="HTML")
-
-    # Navigatsiya
     filter_key = f"{data.get('property_type')}:{data.get('location_id')}"
-    await msg.answer(
-        f"📄 <i>{offset+1}–{min(offset+PER_PAGE, total)} / {total}</i>",
-        reply_markup=results_nav_kb(offset, total, filter_key),
-        parse_mode="HTML",
-    )
+    nav_row = []
+    if offset > 0:
+        nav_row.append(InlineKeyboardButton(text="⬆️ Oldingi", callback_data="rn:prev"))
+    if offset + PER_PAGE < total:
+        nav_row.append(InlineKeyboardButton(text=f"⬇️ Ko'proq ({total - offset - PER_PAGE} ta)", callback_data="rn:more"))
+    if nav_row:
+        buttons.append(nav_row)
+    buttons.append([
+        InlineKeyboardButton(text="🔍 Yangi qidiruv", callback_data="rn:new"),
+        InlineKeyboardButton(text="🔔 Obuna",         callback_data="rn:sub"),
+    ])
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    list_text = "\n".join(lines)
+    if edit:
+        try:
+            await msg.edit_text(list_text, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            await msg.answer(list_text, reply_markup=markup, parse_mode="HTML")
+    else:
+        await msg.answer(list_text, reply_markup=markup, parse_mode="HTML")
+
     await state.set_state(BuyerStates.results)
 
     # Save to search history

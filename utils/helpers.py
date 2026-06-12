@@ -126,21 +126,21 @@ def check_banned(text: str) -> str | None:
 
 
 def listing_short_line(lst: dict) -> str:
-    """Qisqa qator: '🏢 Korzinka · 2x · 3/9 · 68m² · evro · 72.000$'"""
-    parts = [PROPERTY_LABELS.get(lst.get("property_type", ""), "🏠")]
+    """Qisqa qator: 'Orinter  2xona  50m²  2/9  65.000$  O'rtacha'"""
+    parts = []
     if lst.get("landmark"):
-        parts[0] += f" {lst['landmark']}"
+        parts.append(lst["landmark"])
     if lst.get("xonalar"):
-        parts.append(f"{lst['xonalar']}x")
-    if lst.get("floor") and lst.get("total_floors"):
-        parts.append(f"{lst['floor']}/{lst['total_floors']}")
+        parts.append(f"{lst['xonalar']}xona")
     if lst.get("area"):
         parts.append(f"{int(lst['area'])}m²")
-    if lst.get("renovation"):
-        parts.append(RENOVATION_SHORT.get(lst["renovation"], lst["renovation"]))
+    if lst.get("floor") and lst.get("total_floors"):
+        parts.append(f"{lst['floor']}-etaj/{lst['total_floors']}")
     if lst.get("price_display"):
-        parts.append(f"*{lst['price_display']}*")
-    return " · ".join(parts)
+        parts.append(lst["price_display"])
+    if lst.get("renovation"):
+        parts.append(RENOVATION_SHORT.get(lst["renovation"], lst["renovation"]).capitalize())
+    return "  ".join(parts) if parts else "E'lon"
 
 
 RENT_FOR_LABELS = {
