@@ -45,30 +45,19 @@ def add_photo_watermark(image_bytes: bytes) -> bytes:
 
     # Matn o'lchamini aniqlash
     tmp_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    bbox   = tmp_draw.textbbox((0, 0), text, font=font)
-    txt_w  = bbox[2] - bbox[0] + 20
-    txt_h  = bbox[3] - bbox[1] + 20
+    bbox  = tmp_draw.textbbox((0, 0), text, font=font)
+    txt_w = bbox[2] - bbox[0]
+    txt_h = bbox[3] - bbox[1]
 
-    # Diagonal tile yaratamiz
-    tile_w = txt_w + 60
-    tile_h = txt_h + 60
-    tile   = Image.new("RGBA", (tile_w, tile_h), (0, 0, 0, 0))
-    td     = ImageDraw.Draw(tile)
-    # Soya
-    td.text((12, 12), text, font=font, fill=(0, 0, 0, 55))
-    # Asosiy matn — oq, xira
-    td.text((10, 10), text, font=font, fill=(255, 255, 255, 75))
-
-    # Tile ni diagonal burish
-    angle  = -30
-    rotated = tile.rotate(angle, expand=True)
-    rw, rh  = rotated.size
-
-    # Overlay yaratamiz — butun rasmni qoplash uchun tile ni takrorlaymiz
+    # Markazda bitta watermark
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    for y in range(-rh, h + rh, rh):
-        for x in range(-rw, w + rw, rw):
-            overlay.paste(rotated, (x, y), rotated)
+    od = ImageDraw.Draw(overlay)
+    x = (w - txt_w) // 2
+    y = (h - txt_h) // 2
+    # Soya
+    od.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 60))
+    # Asosiy matn — oq, yarim shaffof
+    od.text((x, y), text, font=font, fill=(255, 255, 255, 100))
 
     result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
@@ -98,12 +87,11 @@ async def add_video_watermark(input_bytes: bytes, ext: str = "mp4") -> bytes | N
         with open(inp, "wb") as f:
             f.write(input_bytes)
 
-        # Diagonal takrorlanuvchi watermark (tile effekti)
+        # Markazda bitta watermark
         vf = (
-            f"drawtext=text='{text}':fontcolor=white@0.30:fontsize=32:"
-            f"x='mod(n*2+50,w-text_w)':y='mod(n+30,h-text_h)',"
-            f"drawtext=text='{text}':fontcolor=white@0.30:fontsize=32:"
-            f"x='mod(n*2+w/2,w-text_w)':y='mod(n+h/2,h-text_h)'"
+            f"drawtext=text='{text}':fontcolor=white@0.40:fontsize=32:"
+            f"x='(w-text_w)/2':y='(h-text_h)/2':"
+            f"shadowcolor=black@0.25:shadowx=2:shadowy=2"
         )
 
         cmd = [
