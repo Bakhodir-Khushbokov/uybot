@@ -496,18 +496,26 @@ async def org_admin_hours(msg: Message, state: FSMContext):
 @router.message(OrgAdminStates.photo, F.photo)
 async def org_admin_photo(msg: Message, state: FSMContext):
     file_id = msg.photo[-1].file_id
-    # Kanalga yuklash
-    if ORGS_CHANNEL_ID:
-        try:
-            data_tmp = await state.get_data()
-            name_tmp = data_tmp.get("name", "Tashkilot")
-            sent = await msg.bot.send_photo(
-                ORGS_CHANNEL_ID, photo=file_id,
-                caption=f"🏢 {name_tmp}"
-            )
+    # Watermark qo'shib kanalga yuklash
+    try:
+        from utils.watermark import add_photo_watermark
+        from aiogram.types import BufferedInputFile
+        file_info  = await msg.bot.get_file(file_id)
+        img_bytes  = await msg.bot.download_file(file_info.file_path)
+        wm_bytes   = add_photo_watermark(img_bytes.read())
+        data_tmp   = await state.get_data()
+        name_tmp   = data_tmp.get("name", "Tashkilot")
+        inp        = BufferedInputFile(wm_bytes, filename="photo.jpg")
+        if ORGS_CHANNEL_ID:
+            sent   = await msg.bot.send_photo(ORGS_CHANNEL_ID, photo=inp,
+                                              caption=f"🏢 {name_tmp}")
             file_id = sent.photo[-1].file_id
-        except Exception:
-            pass
+        else:
+            sent   = await msg.answer_photo(inp)
+            file_id = sent.photo[-1].file_id
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Org foto watermark xato: {e}")
 
     await state.update_data(photo_id=file_id)
     await msg.answer(

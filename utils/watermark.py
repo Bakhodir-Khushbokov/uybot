@@ -2,47 +2,85 @@
 Rasm va videoga watermark qo'shish.
 """
 import io
+import os
+import asyncio
+import tempfile
 from PIL import Image, ImageDraw, ImageFont
 
 
-WATERMARK_TEXT = "@UyJoy_bot"   # ← shu yerda o'zgartiring
+WATERMARK_TEXT = "@UyJoy_bot"   # ← bot username
 
 
-def add_watermark(image_bytes: bytes) -> bytes:
-    """Rasmga diagonal watermark qo'shib, bytes qaytaradi."""
+def add_photo_watermark(image_bytes: bytes) -> bytes:
+    """Rasmga watermark qo'shib, bytes qaytaradi."""
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
     w, h = img.size
 
-    # Overlay layer
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw    = ImageDraw.Draw(overlay)
 
-    # Shrift o'lchami — rasm kengligiga qarab
-    font_size = max(20, w // 18)
+    font_size = max(24, w // 16)
     try:
         font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
     except Exception:
-        font = ImageFont.load_default()
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
 
-    # Matn o'lchami
-    bbox     = draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
-    txt_w    = bbox[2] - bbox[0]
-    txt_h    = bbox[3] - bbox[1]
+    bbox  = draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
+    txt_w = bbox[2] - bbox[0]
+    txt_h = bbox[3] - bbox[1]
 
-    # Markazga va pastga — ikki qator
-    positions = [
-        (w // 2 - txt_w // 2, h // 2 - txt_h // 2),          # markaz
-        (w - txt_w - 15,      h - txt_h - 15),                # o'ng pastki burchak
-    ]
+    # O'ng pastki burchak
+    x = w - txt_w - 20
+    y = h - txt_h - 20
 
-    for pos in positions:
-        # Soya (o'qilishi uchun)
-        draw.text((pos[0]+2, pos[1]+2), WATERMARK_TEXT, font=font, fill=(0, 0, 0, 100))
-        # Asosiy matn — oq, yarim shaffof
-        draw.text(pos, WATERMARK_TEXT, font=font, fill=(255, 255, 255, 180))
+    # Soya
+    draw.text((x + 2, y + 2), WATERMARK_TEXT, font=font, fill=(0, 0, 0, 140))
+    # Asosiy matn
+    draw.text((x, y), WATERMARK_TEXT, font=font, fill=(255, 255, 255, 200))
 
-    # Birlashtirish
     result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
-    result.save(buf, format="JPEG", quality=90)
+    result.save(buf, format="JPEG", quality=88)
     return buf.getvalue()
+
+
+async def add_video_watermark(input_bytes: bytes, ext: str = "mp4") -> bytes | None:
+    """
+    Videoga ffmpeg orqali watermark qo'shadi.
+    ffmpeg topilmasa None qaytaradi (asl video ishlatiladi).
+    """
+    import shutil
+    if not shutil.which("ffmpeg"):
+        return None
+
+    with tempfile.TemporaryDirectory() as tmp:
+        inp  = os.path.join(tmp, f"in.{ext}")
+        out  = os.path.join(tmp, "out.mp4")
+
+        with open(inp, "wb") as f:
+            f.write(input_bytes)
+
+        cmd = [
+            "ffmpeg", "-y", "-i", inp,
+            "-vf",
+            f"drawtext=text='{WATERMARK_TEXT}':fontcolor=white:fontsize=36:"
+            f"box=1:boxcolor=black@0.4:boxborderw=6:"
+            f"x=w-tw-20:y=h-th-20",
+            "-codec:a", "copy",
+            "-preset", "ultrafast",
+            out,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+
+        if os.path.exists(out):
+            with open(out, "rb") as f:
+                return f.read()
+    return None

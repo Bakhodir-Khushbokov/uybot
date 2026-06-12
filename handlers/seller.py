@@ -449,10 +449,30 @@ async def got_video(msg: Message, state: FSMContext):
             )
             return
 
-    # Videoni media kanalga forward qilib, doimiy file_id olish
+    # Watermark qo'shib kanalga yuklash
+    from utils.watermark import add_video_watermark
+    import logging
+    log = logging.getLogger(__name__)
+
     permanent_file_id = v.file_id  # fallback
-    if MEDIA_CHANNEL_ID:
-        try:
+    try:
+        # Videoni yuklab olamiz
+        file_info = await msg.bot.get_file(v.file_id)
+        video_bytes = await msg.bot.download_file(file_info.file_path)
+        video_data  = video_bytes.read()
+
+        # Watermark qo'shish
+        wm_bytes = await add_video_watermark(video_data)
+
+        if wm_bytes and MEDIA_CHANNEL_ID:
+            # Watermarkli videoni kanalga yuklash
+            from aiogram.types import BufferedInputFile
+            inp  = BufferedInputFile(wm_bytes, filename="video.mp4")
+            sent = await msg.bot.send_video(MEDIA_CHANNEL_ID, video=inp,
+                                            caption=f"🏠 E'lon | @UyJoy_bot")
+            permanent_file_id = sent.video.file_id
+        elif MEDIA_CHANNEL_ID:
+            # ffmpeg yo'q — oddiy forward
             sent = await msg.bot.forward_message(
                 chat_id=MEDIA_CHANNEL_ID,
                 from_chat_id=msg.chat.id,
@@ -460,9 +480,8 @@ async def got_video(msg: Message, state: FSMContext):
             )
             if sent.video:
                 permanent_file_id = sent.video.file_id
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Media kanalga forward qilishda xato: {e}")
+    except Exception as e:
+        log.warning(f"Video watermark xato: {e}")
 
     await state.update_data(video_file_id=permanent_file_id)
     await wait.delete()
