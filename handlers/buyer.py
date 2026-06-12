@@ -404,10 +404,20 @@ async def show_listing_detail(msg: Message, listing_id: int, user_id: int):
         await msg.answer("Bu e'lon topilmadi.")
         return
 
+    if lst.get("status") == "deleted":
+        await msg.answer(
+            "🗑 <b>Bu e'lon endi mavjud emas.</b>\n\n"
+            "E'lon sotildi va egasi tomonidan botdan olib tashlandi.",
+            parse_mode="HTML",
+        )
+        return
+
     loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else {}
     text = listing_full_card(lst, loc)
 
     await db.increment_views(listing_id)
+    # Telefon 30 daqiqalik vaqtini boshlash
+    await db.reveal_phone(user_id, listing_id)
 
     markup = contact_kb(listing_id)
 

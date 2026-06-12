@@ -1115,6 +1115,19 @@ async def delete_reason(cb: CallbackQuery):
 
     await db.update_listing_status(listing_id, "deleted")
 
+    # Sevimlilarga xabar yuborish
+    fav_users = await db.get_listing_favorites_users(listing_id)
+    for fav_uid in fav_users:
+        try:
+            await cb.bot.send_message(
+                fav_uid,
+                f"🗑 <b>Siz saqlagan e'lon #{listing_id} endi mavjud emas.</b>\n\n"
+                "E'lon sotildi va egasi tomonidan botdan olib tashlandi.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
     if reason == "sold_here":
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         donate_kb = InlineKeyboardMarkup(inline_keyboard=[[
