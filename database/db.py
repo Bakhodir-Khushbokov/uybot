@@ -181,11 +181,19 @@ async def init_db():
 
     # migrations
     async with aiosqlite.connect(DB_PATH) as db:
-        for col, definition in [
-            ("is_blocked", "INTEGER DEFAULT 0"),
-        ]:
+        for col, definition in [("is_blocked", "INTEGER DEFAULT 0")]:
             try:
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+                await db.commit()
+            except Exception:
+                pass
+        for col, definition in [
+            ("tuman",        "TEXT"),
+            ("viloyat",      "TEXT"),
+            ("service_type", "TEXT"),
+        ]:
+            try:
+                await db.execute(f"ALTER TABLE organizations ADD COLUMN {col} {definition}")
                 await db.commit()
             except Exception:
                 pass
