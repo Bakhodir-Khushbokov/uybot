@@ -25,6 +25,7 @@ router = Router()
 
 # ── Kategoriyalar (emoji + nom) ──────────────────────────────
 ORG_CATEGORIES = {
+    "kommunal":   "🏘 Kommunal xizmatlar",
     "notarius":   "📜 Notariuslar",
     "bank":       "🏦 Banklar",
     "makler":     "🤝 Maklerlik agentliklari",
@@ -35,15 +36,31 @@ ORG_CATEGORIES = {
 
 CAT_ICONS = {k: v.split()[0] for k, v in ORG_CATEGORIES.items()}
 
+# ── Kommunal xizmat turlari ───────────────────────────────────
+KOMMUNAL_TYPES = {
+    "elektr":    "⚡️ Elektr energiya",
+    "sovuqsuv":  "💧 Sovuq suv",
+    "issiqsuv":  "♨️ Issiq suv (Veolia)",
+    "tozahudud": "🗑 Toza Hudud (Musor)",
+    "soliq":     "🧾 Soliq inspeksiyasi",
+    "gaz":       "🔥 Tuman Gaz",
+    "pasport":   "🪪 Pasport stol",
+    "davlat":    "🏛 Davlat xizmatlari",
+    "kadastr":   "📐 Tuman Kadastr",
+}
+
 
 class OrgAdminStates(StatesGroup):
-    category    = State()
-    name        = State()
-    address     = State()
-    phone       = State()
-    work_hours  = State()
-    photo       = State()
-    description = State()
+    category     = State()
+    kom_viloyat  = State()   # kommunal uchun
+    kom_tuman    = State()   # kommunal uchun
+    kom_type     = State()   # kommunal uchun
+    name         = State()
+    address      = State()
+    phone        = State()
+    work_hours   = State()
+    photo        = State()
+    description  = State()
 
 
 def is_admin(user_id: int) -> bool:
@@ -87,6 +104,33 @@ def admin_cat_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def kommunal_types_kb(tuman: str, existing: list[str]) -> InlineKeyboardMarkup:
+    """9 ta xizmat — mavjudlari ✅, yo'qlari bo'sh ko'rinadi."""
+    rows = []
+    for key, label in KOMMUNAL_TYPES.items():
+        icon = "✅ " if key in existing else ""
+        rows.append([InlineKeyboardButton(
+            text=f"{icon}{label}",
+            callback_data=f"kom_type:{key}"
+        )])
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="org_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def kommunal_viloyat_kb(viloyatlar: list[str]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=v, callback_data=f"kom_vil:{v}")]
+            for v in viloyatlar]
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="org_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def kommunal_tuman_kb(tumanlar: list[str]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=t, callback_data=f"kom_tum:{t}")]
+            for t in tumanlar]
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="org_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 # ─────────────────────────────────────────────────────────────
 #  FOYDALANUVCHI OQIMI
 # ─────────────────────────────────────────────────────────────
@@ -114,8 +158,23 @@ async def orgs_start(msg: Message, state: FSMContext):
 async def org_category_chosen(cb: CallbackQuery, state: FSMContext):
     cat = cb.data.split(":")[1]
     cat_label = ORG_CATEGORIES.get(cat, cat)
-    orgs = await db.get_orgs_by_category(cat)
 
+    # Kommunal xizmatlar — viloyat tanlash
+    if cat == "kommunal":
+        viloyatlar = await db.get_viloyatlar()
+        if not viloyatlar:
+            await cb.answer("Ma'lumotlar bazasida viloyatlar yo'q.", show_alert=True)
+            return
+        await state.update_data(current_category="kommunal")
+        await cb.message.edit_text(
+            "🏘 <b>Kommunal xizmatlar</b>\n\nViloyatni tanlang:",
+            reply_markup=kommunal_viloyat_kb(viloyatlar),
+            parse_mode="HTML",
+        )
+        await cb.answer()
+        return
+
+    orgs = await db.get_orgs_by_category(cat)
     if not orgs:
         await cb.answer(f"{cat_label} bo'yicha hozircha ma'lumot yo'q.", show_alert=True)
         return
@@ -126,6 +185,87 @@ async def org_category_chosen(cb: CallbackQuery, state: FSMContext):
         reply_markup=orgs_list_kb(orgs, cat),
         parse_mode="HTML",
     )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("kom_vil:"))
+async def kommunal_viloyat(cb: CallbackQuery, state: FSMContext):
+    viloyat = cb.data.split(":", 1)[1]
+    tumanlar = await db.get_tumanlar(viloyat)
+    await state.update_data(kom_viloyat=viloyat)
+    await cb.message.edit_text(
+        f"🏘 <b>Kommunal xizmatlar</b>\n📍 {viloyat}\n\nTumanni tanlang:",
+        reply_markup=kommunal_tuman_kb(tumanlar),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("kom_tum:"))
+async def kommunal_tuman(cb: CallbackQuery, state: FSMContext):
+    tuman = cb.data.split(":", 1)[1]
+    await state.update_data(kom_tuman=tuman)
+    data = await state.get_data()
+    viloyat = data.get("kom_viloyat", "")
+
+    # Mavjud kommunal tashkilotlarni olamiz
+    existing_orgs = await db.get_kommunal_by_tuman(tuman)
+    existing_types = [o["service_type"] for o in existing_orgs if o.get("service_type")]
+
+    await cb.message.edit_text(
+        f"🏘 <b>Kommunal xizmatlar</b>\n"
+        f"📍 {viloyat} — {tuman}\n\n"
+        f"Xizmat turini tanlang:\n"
+        f"<i>✅ — ma'lumot kiritilgan</i>",
+        reply_markup=kommunal_types_kb(tuman, existing_types),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("kom_type:"))
+async def kommunal_type_view(cb: CallbackQuery, state: FSMContext):
+    stype = cb.data.split(":")[1]
+    data  = await state.get_data()
+    tuman = data.get("kom_tuman", "")
+    viloyat = data.get("kom_viloyat", "")
+    label = KOMMUNAL_TYPES.get(stype, stype)
+
+    org = await db.get_kommunal_org(tuman, stype)
+    if not org:
+        await cb.answer(
+            f"{label} bo'yicha hozircha ma'lumot yo'q.\n"
+            "Tez orada qo'shiladi!",
+            show_alert=True
+        )
+        return
+
+    text = (
+        f"🏘 <b>{label}</b>\n"
+        f"📍 {viloyat} — {tuman}\n\n"
+        f"<b>{org['name']}</b>\n"
+    )
+    if org.get("address"):   text += f"📍 {org['address']}\n"
+    if org.get("work_hours"):text += f"🕐 {org['work_hours']}\n"
+    if org.get("phone"):     text += f"📞 <code>{org['phone']}</code>\n"
+    if org.get("description"):text += f"\n📝 {org['description']}\n"
+
+    adm = is_admin(cb.from_user.id)
+    kb  = org_detail_kb(org["id"],
+                        has_location=bool(org.get("lat") and org.get("lon")),
+                        is_adm=adm)
+
+    if org.get("photo_id"):
+        try:
+            await cb.message.delete()
+            await cb.message.answer_photo(
+                photo=org["photo_id"], caption=text,
+                reply_markup=kb, parse_mode="HTML",
+            )
+        except Exception:
+            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -239,13 +379,75 @@ async def cmd_org_add(msg: Message, state: FSMContext):
 async def org_admin_category(cb: CallbackQuery, state: FSMContext):
     cat = cb.data.split(":")[1]
     await state.update_data(category=cat)
+
+    if cat == "kommunal":
+        # Kommunal: avval viloyat tanlash
+        viloyatlar = await db.get_viloyatlar()
+        rows = [[InlineKeyboardButton(text=v, callback_data=f"orga_kom_vil:{v}")]
+                for v in viloyatlar]
+        await cb.message.edit_text(
+            "🏘 <b>Kommunal xizmat</b>\n\nViloyatni tanlang:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            parse_mode="HTML",
+        )
+        await state.set_state(OrgAdminStates.kom_viloyat)
+    else:
+        await cb.message.edit_text(
+            f"✅ Kategoriya: <b>{ORG_CATEGORIES.get(cat, cat)}</b>\n\n"
+            "📝 Tashkilot nomini yozing:",
+            parse_mode="HTML",
+        )
+        await cb.message.answer("Bekor qilish:", reply_markup=cancel_kb())
+        await state.set_state(OrgAdminStates.name)
+    await cb.answer()
+
+
+@router.callback_query(OrgAdminStates.kom_viloyat, F.data.startswith("orga_kom_vil:"))
+async def org_admin_kom_viloyat(cb: CallbackQuery, state: FSMContext):
+    viloyat = cb.data.split(":", 1)[1]
+    await state.update_data(viloyat=viloyat)
+    tumanlar = await db.get_tumanlar(viloyat)
+    rows = [[InlineKeyboardButton(text=t, callback_data=f"orga_kom_tum:{t}")]
+            for t in tumanlar]
     await cb.message.edit_text(
-        f"✅ Kategoriya: <b>{ORG_CATEGORIES.get(cat, cat)}</b>\n\n"
-        "📝 Tashkilot nomini yozing:",
+        f"📍 {viloyat}\n\nTumanni tanlang:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode="HTML",
+    )
+    await state.set_state(OrgAdminStates.kom_tuman)
+    await cb.answer()
+
+
+@router.callback_query(OrgAdminStates.kom_tuman, F.data.startswith("orga_kom_tum:"))
+async def org_admin_kom_tuman(cb: CallbackQuery, state: FSMContext):
+    tuman = cb.data.split(":", 1)[1]
+    await state.update_data(tuman=tuman)
+
+    rows = [[InlineKeyboardButton(text=label, callback_data=f"orga_kom_type:{key}")]
+            for key, label in KOMMUNAL_TYPES.items()]
+    await cb.message.edit_text(
+        f"🏘 Kommunal xizmat turi:\n\nQaysi xizmatni qo'shmoqchisiz?",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode="HTML",
+    )
+    await state.set_state(OrgAdminStates.kom_type)
+    await cb.answer()
+
+
+@router.callback_query(OrgAdminStates.kom_type, F.data.startswith("orga_kom_type:"))
+async def org_admin_kom_type(cb: CallbackQuery, state: FSMContext):
+    stype = cb.data.split(":")[1]
+    label = KOMMUNAL_TYPES.get(stype, stype)
+    await state.update_data(service_type=stype, name=label)
+    data = await state.get_data()
+    await cb.message.edit_text(
+        f"✅ <b>{label}</b>\n"
+        f"📍 {data.get('viloyat')} — {data.get('tuman')}\n\n"
+        "📍 Manzilni yozing:",
         parse_mode="HTML",
     )
     await cb.message.answer("Bekor qilish:", reply_markup=cancel_kb())
-    await state.set_state(OrgAdminStates.name)
+    await state.set_state(OrgAdminStates.address)
     await cb.answer()
 
 

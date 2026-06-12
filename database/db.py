@@ -807,15 +807,39 @@ async def add_org(data: dict) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             """INSERT INTO organizations
-               (category, name, address, phone, work_hours, lat, lon, photo_id, description)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               (category, name, address, phone, work_hours, lat, lon,
+                photo_id, description, viloyat, tuman, service_type)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (data.get("category"), data.get("name"), data.get("address"),
              data.get("phone"), data.get("work_hours"),
              data.get("lat"), data.get("lon"),
-             data.get("photo_id"), data.get("description")),
+             data.get("photo_id"), data.get("description"),
+             data.get("viloyat"), data.get("tuman"), data.get("service_type")),
         )
         await db.commit()
         return cur.lastrowid
+
+
+async def get_kommunal_org(tuman: str, service_type: str) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM organizations WHERE category='kommunal' AND tuman=? AND service_type=? AND active=1",
+            (tuman, service_type),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def get_kommunal_by_tuman(tuman: str) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM organizations WHERE category='kommunal' AND tuman=? AND active=1 ORDER BY service_type",
+            (tuman,),
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
 
 
 async def update_org(org_id: int, data: dict):
