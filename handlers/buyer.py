@@ -416,6 +416,12 @@ async def show_listing_detail(msg: Message, listing_id: int, user_id: int):
     else:
         await msg.answer(text, reply_markup=markup, parse_mode="HTML")
 
+    # Lokatsiya avtomatik
+    lat = lst.get("lat")
+    lon = lst.get("lon")
+    if lat and lon:
+        await msg.answer_location(latitude=float(lat), longitude=float(lon))
+
 
 # ── Contact / favorite callbacks ────────────────────────────────
 @router.callback_query(F.data.startswith("cl:"))

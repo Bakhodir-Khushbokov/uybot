@@ -206,8 +206,7 @@ def contact_kb(listing_id: int) -> InlineKeyboardMarkup:
     return kb(
         [("📞 Raqamni ko'rish", f"cl:phone:{listing_id}"),
          ("❤️ Saqlash",         f"cl:fav:{listing_id}")],
-        [("📍 Lokatsiya",       f"cl:loc:{listing_id}"),
-         ("🚩 Shikoyat",        f"cl:report:{listing_id}")],
+        [("🚩 Shikoyat",        f"cl:report:{listing_id}")],
     )
 
 
