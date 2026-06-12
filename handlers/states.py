@@ -17,7 +17,10 @@ class SellerStates(StatesGroup):
     loc_type       = State()   # mahalla yoki kvartal (faqat Toshkent shahri)
     mahalla_search = State()
     mahalla_page   = State()
-    kvartal_manual = State()   # Toshkent kvartal qo'lda kiritish
+    kvartal_manual = State()   # Toshkent kvartal qo'lda kiritish (zaxira)
+    kvartal_page   = State()   # Kvartal tugmalar sahifasi
+    street_page    = State()   # Ko'cha tugmalar sahifasi
+    street_search  = State()   # Ko'cha qidiruv matni
     # Dom
     dom_number     = State()
     loc_found      = State()
