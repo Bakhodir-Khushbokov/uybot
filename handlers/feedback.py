@@ -82,6 +82,7 @@ async def feedback_text(msg: Message, state: FSMContext):
         return
 
     data  = await state.get_data()
+    ftype = data.get("feedback_type", "fikr")
     label = data.get("feedback_label", "Xabar")
     sender = f"@{msg.from_user.username}" if msg.from_user.username else f"ID:{msg.from_user.id}"
     now   = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
