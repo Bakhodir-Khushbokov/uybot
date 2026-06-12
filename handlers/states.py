@@ -58,6 +58,7 @@ class BuyerStates(StatesGroup):
     renovation      = State()
     # Natijalar
     results         = State()
+    report_text     = State()   # "Boshqa sabab" uchun erkin matn
 
 
 class AdminStates(StatesGroup):

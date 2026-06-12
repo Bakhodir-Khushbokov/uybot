@@ -476,18 +476,31 @@ async def contact_action(cb: CallbackQuery, state: FSMContext):
 
 # ── Shikoyat sababi ──────────────────────────────────────────
 @router.callback_query(F.data.startswith("rep:"))
-async def report_reason_cb(cb: CallbackQuery):
+async def report_reason_cb(cb: CallbackQuery, state: FSMContext):
     from config import ADMIN_IDS
     _, reason_key, lid = cb.data.split(":")
     listing_id = int(lid)
 
     REASONS = {
-        "firib":   "🎭 Firibgar / Soxta e'lon",
-        "narx":    "💰 Noto'g'ri narx",
-        "boshqa":  "📵 Boshqa raqam / Aloqa yo'q",
-        "takror":  "♻️ Takroriy e'lon",
-        "spam":    "🚫 Spam",
+        "sotilgan": "✅ Sotilgan ekan",
+        "soxta":    "👻 Mavjud emas / Soxta e'lon",
+        "narx":     "💰 Narx noto'g'ri",
+        "aloqa":    "📵 Aloqa yo'q / Javob bermaydi",
+        "firib":    "🎭 Firibgarlik shubhasi",
     }
+
+    # "Boshqa sabab" — erkin matn so'raymiz
+    if reason_key == "boshqa":
+        await state.update_data(report_listing_id=listing_id)
+        await state.set_state(BuyerStates.report_text)
+        await cb.message.edit_text(
+            "✏️ <b>Shikoyat sababini yozing:</b>\n\n"
+            "<i>Qisqacha tushuntiring — nima muammo bor?</i>",
+            parse_mode="HTML",
+        )
+        await cb.answer()
+        return
+
     reason_text = REASONS.get(reason_key, reason_key)
 
     result = await db.add_report(listing_id, cb.from_user.id, reason_text)

@@ -359,11 +359,12 @@ def renovation_filter_kb() -> InlineKeyboardMarkup:
 # ── Shikoyat sababi ──────────────────────────────────────────
 def report_reason_kb(listing_id: int) -> InlineKeyboardMarkup:
     return kb(
-        [("🎭 Firibgar / Soxta e'lon", f"rep:firib:{listing_id}")],
-        [("💰 Noto'g'ri narx",         f"rep:narx:{listing_id}")],
-        [("📵 Aloqa yo'q / Boshqa tel", f"rep:boshqa:{listing_id}")],
-        [("♻️ Takroriy e'lon",          f"rep:takror:{listing_id}")],
-        [("🚫 Spam",                    f"rep:spam:{listing_id}")],
+        [("✅ Sotilgan ekan",              f"rep:sotilgan:{listing_id}")],
+        [("👻 Mavjud emas / Soxta e'lon", f"rep:soxta:{listing_id}")],
+        [("💰 Narx noto'g'ri",            f"rep:narx:{listing_id}")],
+        [("📵 Aloqa yo'q / Javob bermaydi", f"rep:aloqa:{listing_id}")],
+        [("🎭 Firibgarlik shubhasi",       f"rep:firib:{listing_id}")],
+        [("✏️ Boshqa sabab",              f"rep:boshqa:{listing_id}")],
     )
 
 
