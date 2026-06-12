@@ -440,10 +440,18 @@ async def contact_action(cb: CallbackQuery, state: FSMContext):
         if not lst:
             await cb.answer("E'lon topilmadi.", show_alert=True)
             return
+        if lst.get("status") == "deleted":
+            await cb.answer("Bu e'lon sotildi va egasi tomonidan olib tashlandi.", show_alert=True)
+            return
+        # 30 daqiqa chek
+        active = await db.is_phone_active(cb.from_user.id, listing_id, minutes=30)
+        if not active:
+            await cb.answer("⏳ Raqam muddati tugagan. E'lonni qayta oching.", show_alert=True)
+            return
         seller = await db.get_user(lst["seller_id"])
         phone = seller.get("phone", "—") if seller else "—"
         await db.increment_contacts(listing_id)
-        await cb.answer(f"📞 {mask_phone(phone)}", show_alert=True)
+        await cb.answer(f"📞 {phone}", show_alert=True)
         await cb.message.answer(
             "⚠️ <b>Ehtiyot bo'ling!</b>\n\n"
             "🚫 Uyni <b>ko'rmasdan</b> hech qachon zalog yoki avans to'lamang\n"

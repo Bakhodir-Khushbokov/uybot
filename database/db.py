@@ -176,6 +176,12 @@ async def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_notary_user   ON notary_orders(user_id);
         CREATE INDEX IF NOT EXISTS idx_notary_status ON notary_orders(status);
+        CREATE TABLE IF NOT EXISTS phone_reveals (
+            user_id    INTEGER NOT NULL,
+            listing_id INTEGER NOT NULL,
+            revealed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, listing_id)
+        );
         """)
         await db.commit()
 
@@ -1018,3 +1024,40 @@ async def save_feedback(user_id: int, sender: str, label: str, text: str):
             (user_id, sender, label, text),
         )
         await db.commit()
+
+
+async def reveal_phone(user_id: int, listing_id: int) -> bool:
+    """Telefon raqamini ochadi. True = yangi ochildi, False = allaqachon ochilgan."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO phone_reveals (user_id, listing_id) VALUES (?,?)",
+            (user_id, listing_id),
+        )
+        await db.commit()
+        row = await (await db.execute(
+            "SELECT revealed_at FROM phone_reveals WHERE user_id=? AND listing_id=?",
+            (user_id, listing_id),
+        )).fetchone()
+        return row is not None
+
+
+async def is_phone_active(user_id: int, listing_id: int, minutes: int = 30) -> bool:
+    """30 daqiqa ichida ochilganmi?"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        row = await (await db.execute(
+            """SELECT revealed_at FROM phone_reveals
+               WHERE user_id=? AND listing_id=?
+               AND revealed_at > datetime('now', ? || ' minutes')""",
+            (user_id, listing_id, f"-{minutes}"),
+        )).fetchone()
+        return row is not None
+
+
+async def get_listing_favorites_users(listing_id: int) -> list[int]:
+    """Bu e'lonni sevimlilariga qo'shgan foydalanuvchilar user_id lari."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        rows = await (await db.execute(
+            "SELECT user_id FROM favorites WHERE listing_id=?",
+            (listing_id,),
+        )).fetchall()
+        return [r[0] for r in rows]
