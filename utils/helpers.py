@@ -155,58 +155,58 @@ JIHOZ_ICONS = {
 
 
 def listing_full_card(lst: dict, loc: dict | None = None) -> str:
-    """
-    Tartib:
-      1. Shahar · Mahalla · Mo'ljal
-      2. Tur (Ijara/Sotish · Kvartira · Novostroyka)
-      3. Tavsif (xona, qavat, maydon, remont, balkon, jihoz, kimlar uchun, komisyon)
-      4. Narx
-      5. Telefon
-    """
     import json as _json
 
     lines = []
 
-    # 1. Joylashuv — birinchi qatorda
-    if loc:
-        loc_parts = []
-        city = loc.get("viloyat", "")
-        tuman = loc.get("tuman", "").replace(" tumani", "").replace(" shahri", "")
-        mahalla = loc.get("mahalla", "")
-        if city:   loc_parts.append(city)
-        if tuman:  loc_parts.append(tuman)
-        if mahalla: loc_parts.append(mahalla)
-        loc_str = " · ".join(loc_parts)
-        if lst.get("landmark"):
-            loc_str += f" · _{lst['landmark']}_"
-        lines.append(f"📍 {loc_str}")
-    elif lst.get("landmark"):
-        lines.append(f"📍 _{lst['landmark']}_")
-
-    # 2. Tur
-    trx   = "🔑 Ijara" if lst.get("transaction_type") == "arenda" else "🏷 Sotish"
-    ptype = PROPERTY_LABELS.get(lst.get("property_type", ""), "🏠")
-    dtype = DOM_TYPE_LABELS.get(lst.get("dom_type", ""), "")
-    tur_line = f"{trx}  |  {ptype}"
+    # 1. Sarlavha — "Sotiladi kvartira · Eski dom" yoki "Ijaraga kvartira · Novostroyka"
+    trx   = "Ijaraga" if lst.get("transaction_type") == "arenda" else "Sotiladi"
+    ptype_raw = lst.get("property_type", "")
+    ptype = {"kvartira": "kvartira", "hovli": "hovli",
+             "ofis": "ofis / noturar joy", "yer": "yer parchasiga"}.get(ptype_raw, ptype_raw)
+    dtype = {"novo": "Novostroyka", "eski": "Eski dom"}.get(lst.get("dom_type", ""), "")
+    title = f"🏷 <b>{trx} {ptype}"
     if dtype:
-        tur_line += f"  ·  {dtype}"
-    lines.append(tur_line)
+        title += f" · {dtype}"
+    title += "</b>"
+    lines.append(title)
 
-    # 3. Tavsif
+    # 2. Joylashuv
+    if loc:
+        parts = []
+        viloyat = loc.get("viloyat", "")
+        tuman   = loc.get("tuman", "").replace(" tumani","").replace(" shahri","")
+        mahalla = loc.get("mahalla", "")
+        if viloyat: parts.append(viloyat)
+        if tuman:   parts.append(tuman)
+        if mahalla: parts.append(mahalla)
+        if parts:
+            lines.append("📍 " + ", ".join(parts))
+    if lst.get("landmark"):
+        lines.append(f"🚇 Mo'ljal: {lst['landmark']}")
+
+    # 3. Asosiy parametrlar — bir qatorda
+    params = []
     if lst.get("xonalar"):
-        lines.append(f"🛏 {lst['xonalar']} xona")
-    if lst.get("floor") and lst.get("total_floors"):
-        lines.append(f"🏢 {lst['floor']}/{lst['total_floors']} qavat")
+        params.append(f"🛏 {lst['xonalar']} xona")
     if lst.get("area"):
-        lines.append(f"📐 {int(lst['area'])} m²")
+        params.append(f"📐 {int(lst['area'])} m²")
+    if lst.get("floor") and lst.get("total_floors"):
+        params.append(f"🏢 {lst['floor']}/{lst['total_floors']} qavat")
+    if params:
+        lines.append("  ".join(params))
 
+    # 4. Ta'mirlash va balkon — bir qatorda
+    detail = []
     renov = RENOVATION_LABELS.get(lst.get("renovation", ""), "")
     if renov:
-        lines.append(f"🔨 {renov}")
-
+        detail.append(f"🔨 {renov}")
     if lst.get("balkon"):
-        lines.append(f"🪟 Balkon: {lst['balkon']} m")
+        detail.append(f"🪟 Balkon: {lst['balkon']} m")
+    if detail:
+        lines.append("  ".join(detail))
 
+    # 5. Jihoz (arenda uchun)
     if lst.get("jihoz"):
         try:
             items = _json.loads(lst["jihoz"]) if isinstance(lst["jihoz"], str) else lst["jihoz"]
@@ -220,13 +220,13 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
         lines.append(f"👥 {RENT_FOR_LABELS.get(lst['rent_for'], lst['rent_for'])}")
 
     if lst.get("has_commission"):
-        lines.append("💼 Vositachilik haqi: bor")
+        lines.append("💼 Vositachi orqali")
 
-    # 4. Narx
+    # 6. Narx
     if lst.get("price_display"):
-        lines.append(f"\n💰 *{lst['price_display']}*")
+        lines.append(f"\n💰 <b>{lst['price_display']}</b>")
 
-    # 5. Telefon
+    # 7. Telefon — so'nggi 4 raqam yashirin
     phone = lst.get("phone", "")
     if phone:
         lines.append(f"📞 {mask_phone(phone)}")
@@ -235,10 +235,10 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
 
 
 def mask_phone(phone: str) -> str:
-    """'+998901234567' → '+998 90 *** ** 67'"""
+    """'+998901234567' → '+998 90 *** 23 45'  (so'nggi 4 raqam ko'rinadi)"""
     p = phone.replace("+", "").replace(" ", "")
     if len(p) >= 12:
-        return f"+{p[:3]} {p[3:5]} *** ** {p[-2:]}"
+        return f"+{p[:3]} {p[3:5]} *** {p[-4:-2]} {p[-2:]}"
     return phone
 
 
