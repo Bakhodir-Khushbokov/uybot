@@ -183,28 +183,25 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
         if parts:
             lines.append("📍 " + ", ".join(parts))
     if lst.get("landmark"):
-        lines.append(f"🚇 Mo'ljal: {lst['landmark']}")
+        lines.append(f"▫️ Mo'ljal: {lst['landmark']}")
 
     # 3. Asosiy parametrlar — bir qatorda
     params = []
     if lst.get("xonalar"):
-        params.append(f"🛏 {lst['xonalar']} xona")
+        params.append(f"▫️ {lst['xonalar']} xona")
     if lst.get("area"):
-        params.append(f"📐 {int(lst['area'])} m²")
+        params.append(f"{int(lst['area'])} m²")
     if lst.get("floor") and lst.get("total_floors"):
-        params.append(f"🏢 {lst['floor']}/{lst['total_floors']} qavat")
+        params.append(f"{lst['floor']}-etaj/{lst['total_floors']}")
     if params:
         lines.append("  ".join(params))
 
-    # 4. Ta'mirlash va balkon — bir qatorda
-    detail = []
+    # 4. Ta'mirlash va balkon — alohida qatorlarda
     renov = RENOVATION_LABELS.get(lst.get("renovation", ""), "")
     if renov:
-        detail.append(f"🔨 {renov}")
+        lines.append(f"▫️ Ta'mir: {renov}")
     if lst.get("balkon"):
-        detail.append(f"🪟 Balkon: {lst['balkon']} m")
-    if detail:
-        lines.append("  ".join(detail))
+        lines.append(f"▫️ Balkon: {lst['balkon']} m")
 
     # 5. Jihoz (arenda uchun)
     if lst.get("jihoz"):
