@@ -66,7 +66,7 @@ async def init_db():
             jihoz               TEXT,
             balkon              TEXT,
             has_commission      INTEGER DEFAULT 0,
-            status              TEXT DEFAULT 'pending',
+            status              TEXT DEFAULT 'active',
             views_count         INTEGER DEFAULT 0,
             contact_count       INTEGER DEFAULT 0,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
