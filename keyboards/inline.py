@@ -405,3 +405,58 @@ def commission_kb() -> InlineKeyboardMarkup:
         [("✅ Ha, bor",  "com:yes")],
         [("❌ Yo'q",     "com:no")],
     )
+
+
+# ── Kvartal tugmalari ─────────────────────────────────────────
+def kvartal_kb(kvartals: list[dict]) -> InlineKeyboardMarkup:
+    """Tuman bo'yicha kvartal tugmalari (4 qator, har birida 3 ta)."""
+    rows = []
+    row = []
+    for kv in kvartals:
+        n = kv["kvartal_n"]
+        row.append(InlineKeyboardButton(text=str(n), callback_data=f"kv:{n}"))
+        if len(row) == 4:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Ko'cha tugmalari ──────────────────────────────────────────
+STREETS_PAGE = 8
+
+def street_kb(streets: list[str], offset: int = 0, total: int = 0, show_search: bool = True) -> InlineKeyboardMarkup:
+    """Ko'chalar ro'yxati tugmalari (pagination bilan)."""
+    rows = []
+    for s in streets:
+        label = s.title()[:35]
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"str:{s[:60]}")])
+    nav = []
+    if offset > 0:
+        rows.append([InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"str_page:{offset - STREETS_PAGE}")])
+    if offset + STREETS_PAGE < total:
+        rows.append([InlineKeyboardButton(text="➡️ Keyingi", callback_data=f"str_page:{offset + STREETS_PAGE}")])
+    if show_search:
+        rows.append([InlineKeyboardButton(text="🔍 Qidirish", callback_data="str_search")])
+    rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data="str_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Dom raqami tugmalari ──────────────────────────────────────
+def dom_kb(houses: list[dict]) -> InlineKeyboardMarkup:
+    """Ko'chadagi dom raqamlari tugmalari."""
+    rows = []
+    row = []
+    for h in houses:
+        hn = h["house_number"]
+        row.append(InlineKeyboardButton(text=hn, callback_data=f"dom:{hn}"))
+        if len(row) == 4:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="✏️ Qo'lda yozish", callback_data="dom:manual")])
+    rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data="dom_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

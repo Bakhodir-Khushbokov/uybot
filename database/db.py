@@ -1061,3 +1061,92 @@ async def get_listing_favorites_users(listing_id: int) -> list[int]:
             (listing_id,),
         )).fetchall()
         return [r[0] for r in rows]
+
+
+# ─── Ko'cha va bino ma'lumotlari ───────────────────────────────────────────
+
+async def get_kvartals_by_tuman(tuman: str) -> list[dict]:
+    """Tuman bo'yicha kvartallar ro'yxati (bazadan)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        rows = await (await db.execute(
+            "SELECT kvartal_n, lat, lon FROM kvartals WHERE tuman=? ORDER BY kvartal_n",
+            (tuman,),
+        )).fetchall()
+        return [{"kvartal_n": r[0], "lat": r[1], "lon": r[2]} for r in rows]
+
+
+async def get_streets_by_kvartal(tuman: str, kvartal: str, query: str = "") -> list[str]:
+    """Tuman + kvartal bo'yicha unique ko'chalar."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if query:
+            rows = await (await db.execute(
+                """SELECT DISTINCT LOWER(name_uz) as name FROM streets
+                   WHERE tuman=? AND kvartal=? AND name_uz != ''
+                   AND LOWER(name_uz) LIKE ?
+                   ORDER BY name_uz LIMIT 50""",
+                (tuman, kvartal, f"%{query.lower()}%"),
+            )).fetchall()
+        else:
+            rows = await (await db.execute(
+                """SELECT DISTINCT LOWER(name_uz) as name FROM streets
+                   WHERE tuman=? AND kvartal=? AND name_uz != ''
+                   ORDER BY name_uz LIMIT 50""",
+                (tuman, kvartal),
+            )).fetchall()
+        return [r[0] for r in rows]
+
+
+async def get_streets_by_tuman(tuman: str, query: str = "") -> list[str]:
+    """Tuman bo'yicha barcha unique ko'chalar (hovli uchun)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if query:
+            rows = await (await db.execute(
+                """SELECT DISTINCT LOWER(name_uz) as name FROM streets
+                   WHERE tuman=? AND name_uz != ''
+                   AND LOWER(name_uz) LIKE ?
+                   ORDER BY name_uz LIMIT 50""",
+                (tuman, f"%{query.lower()}%"),
+            )).fetchall()
+        else:
+            rows = await (await db.execute(
+                """SELECT DISTINCT LOWER(name_uz) as name FROM streets
+                   WHERE tuman=? AND name_uz != ''
+                   ORDER BY name_uz LIMIT 50""",
+                (tuman,),
+            )).fetchall()
+        return [r[0] for r in rows]
+
+
+async def get_house_numbers(tuman: str, kvartal: str, street: str) -> list[dict]:
+    """Ko'cha bo'yicha uy raqamlari va koordinatlar."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        rows = await (await db.execute(
+            """SELECT DISTINCT house_number, lat, lon FROM addresses
+               WHERE tuman=? AND kvartal=? AND LOWER(street)=?
+               ORDER BY house_number LIMIT 100""",
+            (tuman, kvartal, street.lower()),
+        )).fetchall()
+        return [{"house_number": r[0], "lat": r[1], "lon": r[2]} for r in rows]
+
+
+async def get_address_coords(tuman: str, kvartal: str, street: str, house_number: str) -> dict | None:
+    """Aniq manzil koordinatlarini qaytarish."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        row = await (await db.execute(
+            """SELECT lat, lon FROM addresses
+               WHERE tuman=? AND kvartal=? AND LOWER(street)=? AND house_number=?
+               LIMIT 1""",
+            (tuman, kvartal, street.lower(), house_number),
+        )).fetchone()
+        if row:
+            return {"lat": row[0], "lon": row[1]}
+        # Ko'cha markazini qaytarish (agar dom topilmasa)
+        row2 = await (await db.execute(
+            """SELECT lat, lon FROM streets
+               WHERE tuman=? AND kvartal=? AND LOWER(name_uz)=?
+               LIMIT 1""",
+            (tuman, kvartal, street.lower()),
+        )).fetchone()
+        if row2:
+            return {"lat": row2[0], "lon": row2[1]}
+        return None

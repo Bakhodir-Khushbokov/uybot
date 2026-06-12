@@ -10,6 +10,7 @@ from keyboards.inline import (
     mahalla_kb, buildings_kb, loc_confirm_kb,
     renovation_kb, currency_kb, confirm_publish_kb, listing_manage_kb,
     xonalar_kb, floor_kb, area_kb,
+    kvartal_kb, street_kb, dom_kb, STREETS_PAGE,
 )
 from keyboards.reply import cancel_kb, location_kb, skip_kb, main_menu_kb, remove_kb
 import database as db
@@ -112,59 +113,173 @@ async def seller_tuman(cb: CallbackQuery, state: FSMContext):
     await state.update_data(tuman=tuman, mah_offset=0, mah_query="")
     data = await state.get_data()
 
-    # Toshkent shahri uchun mahalla/kvartal tanlov
+    # Toshkent shahri — kvartal tugmalari
     if data.get("viloyat") == "Toshkent shahri":
-        await cb.message.edit_text(
-            f"📍 <b>{tuman}</b>\n\nManzil turini tanlang:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🏘 Mahalla",  callback_data="loc_type:mahalla")],
-                [InlineKeyboardButton(text="🔢 Kvartal",  callback_data="loc_type:kvartal")],
-            ]),
+        await _show_kvartals(cb.message, state, tuman)
+        await state.set_state(SellerStates.kvartal_page)
+    else:
+        await _show_mahallalar(cb.message, state)
+        await state.set_state(SellerStates.mahalla_page)
+    await cb.answer()
+
+
+async def _show_kvartals(msg, state: FSMContext, tuman: str):
+    kvartals = await db.get_kvartals_by_tuman(tuman)
+    if not kvartals:
+        await msg.edit_text(
+            f"📍 <b>{tuman}</b>\n\nKvartal raqamini yozing (masalan: 9):",
             parse_mode="HTML",
         )
-        await state.set_state(SellerStates.loc_type)
-    else:
-        await _show_mahallalar(cb.message, state)
-        await state.set_state(SellerStates.mahalla_page)
+        return
+    await msg.edit_text(
+        f"📍 <b>{tuman}</b>\n\nKvartal tanlang:",
+        reply_markup=kvartal_kb(kvartals),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(SellerStates.kvartal_page, F.data.startswith("kv:"))
+async def seller_kvartal_pick(cb: CallbackQuery, state: FSMContext):
+    kvartal_n = int(cb.data[3:])
+    kvartal = f"{kvartal_n}-kvartal"
+    data = await state.get_data()
+    tuman = data["tuman"]
+    await state.update_data(kvartal=kvartal, mahalla_name=kvartal, str_offset=0, str_query="")
+    await _show_streets(cb.message, state, tuman, kvartal)
+    await state.set_state(SellerStates.street_page)
     await cb.answer()
 
 
-@router.callback_query(SellerStates.loc_type, F.data.startswith("loc_type:"))
-async def seller_loc_type(cb: CallbackQuery, state: FSMContext):
-    loc_type = cb.data.split(":")[1]
-    await state.update_data(loc_type=loc_type)
+@router.callback_query(SellerStates.kvartal_page, F.data == "cancel")
+async def seller_kvartal_cancel(cb: CallbackQuery, state: FSMContext):
+    from handlers.common import cmd_cancel
+    await cmd_cancel(cb.message, state)
+    await cb.answer()
 
-    if loc_type == "mahalla":
-        await _show_mahallalar(cb.message, state)
-        await state.set_state(SellerStates.mahalla_page)
+
+async def _show_streets(msg, state: FSMContext, tuman: str, kvartal: str, edit: bool = True):
+    data = await state.get_data()
+    offset = data.get("str_offset", 0)
+    query = data.get("str_query", "")
+    streets = await db.get_streets_by_kvartal(tuman, kvartal, query)
+    total = len(streets)
+    page_streets = streets[offset: offset + STREETS_PAGE]
+    text = (
+        f"📍 <b>{tuman}, {kvartal}</b>\n"
+        f"Ko'cha tanlang: ({total} ta)"
+    )
+    if query:
+        text += f"\n🔍 <i>Qidiruv: {query}</i>"
+    kb = street_kb(page_streets, offset, total)
+    if edit:
+        await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
     else:
-        # Kvartal — qo'lda kiritish
-        data = await state.get_data()
+        await msg.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(SellerStates.street_page, F.data.startswith("str:"))
+async def seller_street_pick(cb: CallbackQuery, state: FSMContext):
+    street = cb.data[4:]
+    data = await state.get_data()
+    tuman = data["tuman"]
+    kvartal = data.get("kvartal", "")
+    await state.update_data(street=street)
+    # Dom raqamlarini ko'rsat
+    houses = await db.get_house_numbers(tuman, kvartal, street)
+    if houses:
         await cb.message.edit_text(
-            f"📍 <b>{data.get('tuman')}</b> — Kvartal raqami yoki nomini yozing:\n\n"
-            "_Masalan: 9-kvartal, Yunusobod 19-kvartal_",
-            parse_mode="Markdown",
+            f"📍 <b>{tuman}, {kvartal}</b>\n"
+            f"🛣 <b>{street.title()}</b>\n\nDom tanlang:",
+            reply_markup=dom_kb(houses),
+            parse_mode="HTML",
+        )
+        await state.set_state(SellerStates.dom_number)
+    else:
+        # Dom raqami yo'q — qo'lda yozsin
+        await cb.message.edit_text(
+            f"📍 <b>{street.title()}</b>\n\nDom raqamini yozing:",
+            parse_mode="HTML",
         )
         await cb.message.answer("👇", reply_markup=cancel_kb())
-        await state.set_state(SellerStates.kvartal_manual)
+        await state.set_state(SellerStates.dom_number)
     await cb.answer()
 
 
-@router.message(SellerStates.kvartal_manual)
-async def seller_kvartal_manual(msg: Message, state: FSMContext):
-    if msg.text == "❌ Bekor qilish":
+@router.callback_query(SellerStates.street_page, F.data.startswith("str_page:"))
+async def seller_street_page(cb: CallbackQuery, state: FSMContext):
+    offset = int(cb.data.split(":")[1])
+    data = await state.get_data()
+    await state.update_data(str_offset=offset)
+    await _show_streets(cb.message, state, data["tuman"], data.get("kvartal", ""))
+    await cb.answer()
+
+
+@router.callback_query(SellerStates.street_page, F.data == "str_search")
+async def seller_street_search_ask(cb: CallbackQuery, state: FSMContext):
+    await cb.message.edit_text("🔍 Ko'cha nomini yozing:")
+    await state.set_state(SellerStates.street_search)
+    await cb.answer()
+
+
+@router.message(SellerStates.street_search)
+async def seller_street_search(msg: Message, state: FSMContext):
+    query = msg.text.strip()
+    data = await state.get_data()
+    await state.update_data(str_query=query, str_offset=0)
+    await _show_streets(msg, state, data["tuman"], data.get("kvartal", ""), edit=False)
+    await state.set_state(SellerStates.street_page)
+
+
+@router.callback_query(SellerStates.street_page, F.data == "str_back")
+async def seller_street_back(cb: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    await _show_kvartals(cb.message, state, data["tuman"])
+    await state.set_state(SellerStates.kvartal_page)
+    await cb.answer()
+
+
+# ── Dom tugmalar orqali tanlash ───────────────────────────────
+@router.callback_query(SellerStates.dom_number, F.data.startswith("dom:"))
+async def seller_dom_pick(cb: CallbackQuery, state: FSMContext):
+    dom = cb.data[4:]
+    if dom == "manual":
+        await cb.message.edit_text("✏️ Dom raqamini yozing (masalan: 15 yoki 15A):")
+        await cb.answer()
         return
-    kvartal = msg.text.strip()
-    await state.update_data(mahalla_name=kvartal, location_id=None)
-    # Dom raqami so'rash
-    await msg.answer(
-        "Dom raqami yoki nomini yozing:\n"
-        "_Masalan: 14-A yoki Navruz ko'chasi 22_\n\n"
-        "Bilmasangiz — «—» yozing",
-        parse_mode="Markdown",
-        reply_markup=cancel_kb(),
+    if dom == "back":
+        data = await state.get_data()
+        await _show_streets(cb.message, state, data["tuman"], data.get("kvartal", ""))
+        await state.set_state(SellerStates.street_page)
+        await cb.answer()
+        return
+    data = await state.get_data()
+    tuman = data["tuman"]
+    kvartal = data.get("kvartal", "")
+    street = data.get("street", "")
+    # Koordinatni bazadan ol
+    coords = await db.get_address_coords(tuman, kvartal, street, dom)
+    address_label = f"{tuman}, {kvartal}, {street.title()}, {dom}-uy"
+    await state.update_data(
+        dom_number=dom,
+        mahalla_name=address_label,
+        lat=coords["lat"] if coords else None,
+        lon=coords["lon"] if coords else None,
+        location_id=None,
     )
-    await state.set_state(SellerStates.dom_number)
+    await cb.message.edit_text(
+        f"✅ Manzil saqlandi:\n<b>{address_label}</b>",
+        parse_mode="HTML",
+    )
+    await _ask_video(cb.message, state)
+    await cb.answer()
+
+
+@router.callback_query(SellerStates.dom_number, F.data == "dom_back")
+async def seller_dom_back(cb: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    await _show_streets(cb.message, state, data["tuman"], data.get("kvartal", ""))
+    await state.set_state(SellerStates.street_page)
+    await cb.answer()
 
 
 async def _show_mahallalar(msg, state: FSMContext, edit: bool = True):
