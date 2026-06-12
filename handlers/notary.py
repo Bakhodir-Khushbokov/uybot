@@ -31,12 +31,35 @@ _doc_timers: dict[int, asyncio.Task] = {}
 
 router = Router()
 
-NOTARY_FEE = "50 000 so'm"          # namoyish uchun; real ma'lumot .env da bo'lishi mumkin
-NOTARY_CARD = "8600 1234 5678 9012"  # to'lov kartasi (config dan ham olish mumkin)
+NOTARY_FEE         = "50 000 so'm"
+NOTARY_FEE_PREMIUM = "250 000 so'm"
+NOTARY_CARD        = "8600 1234 5678 9012"
+
+DISCLAIMER = (
+    "\n\n⚠️ <i>Ushbu ma'lumotlar faqat ma'lumot maqsadida taqdim etiladi "
+    "va yuridik kuchga ega emas. Rasmiy qaror uchun notarius yoki "
+    "kadastr idorasiga murojaat qiling.</i>"
+)
 
 DOC_TYPES = {
     "savdo": "📄 Uy oldi-sottisi shartnomasi",
 }
+
+# Xizmat turlari
+SERVICE_TYPES = {
+    "basic":   f"⚡️ Asosiy tekshiruv — {NOTARY_FEE}",
+    "premium": f"🏆 To'liq yuridik ekspertiza — {NOTARY_FEE_PREMIUM}",
+}
+
+PREMIUM_INCLUDES = (
+    "🏆 <b>To'liq yuridik ekspertiza</b> o'z ichiga oladi:\n\n"
+    "✅ Barcha asosiy tekshiruvlar (soliq, kadastr, kommunal...)\n"
+    "✅ Merosxo'rlik tekshiruvi\n"
+    "✅ Sud nizolari tekshiruvi\n"
+    "✅ Ipoteka va garov tekshiruvi\n"
+    "✅ Yurist xulosasi (yozma)\n"
+    "✅ 48 soat ichida natija"
+)
 
 STATUS_LABELS = {
     "new":           "🆕 Yangi",
