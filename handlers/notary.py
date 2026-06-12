@@ -112,35 +112,74 @@ def admin_notary_kb(order_id: int, assigned: bool = False) -> InlineKeyboardMark
 
 
 # ── Boshlash ─────────────────────────────────────────────────
+def service_type_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"⚡️ Asosiy tekshiruv — {NOTARY_FEE}",
+            callback_data="nt_svc:basic"
+        )],
+        [InlineKeyboardButton(
+            text=f"🏆 To'liq ekspertiza — {NOTARY_FEE_PREMIUM}",
+            callback_data="nt_svc:premium"
+        )],
+        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="nt:cancel")],
+    ])
+
+
 @router.message(F.text == "📜 Uy hujjatlarini tekshirish")
 @router.message(Command("notary"))
 async def notary_start(msg: Message, state: FSMContext):
     await state.clear()
     await msg.answer(
-        "📜 <b>Ko'chmas mulk hujjatlarini notariusga tayyorligini online tekshirish</b>\n\n"
-        "Uy hujjatlari notariusga tayyormi, qarzlari bormi yoki taqiqda turibdimi — "
-        "hammasini bir zumda online tekshirib olasiz:\n\n"
-        "1. 🏛 Soliq qarzdorligi\n"
-        "2. 📐 Kadastr — taqiq, arest va cheklovlar mavjud emasligi; egalik huquqi hujjatga mosligi\n"
-        "3. ⚡️ Elektr energiyasi\n"
-        "4. 🔥 Gaz xizmati\n"
-        "5. 💧 Sovuq suv va oqava suv\n"
-        "6. ♨️ Issiq suv va isitish tizimi\n"
-        "7. 🏠 Mening uyim (JEK)\n"
-        "8. 🪪 IIV — propiska (uyda ro'yxatda turgan shaxslar, shu jumladan voyaga yetmaganlar)\n"
-        "9. 🗑 Toza hudud — chiqindi\n\n"
-        f"💳 <b>Xizmat narxi: {NOTARY_FEE}</b>\n\n"
-        "📎 Hujjatlarning <b>sifatli rasmini</b> yuboring:\n\n"
-        "1️⃣ Egalik huquqini tasdiqlovchi hujjat <i>(oldi-sotdi, meros yoki boshqa)</i>\n"
-        "2️⃣ Kadastr ko'chirmasi\n"
-        "3️⃣ Mulkdorning pasporti yoki ID kartasi <i>(oldi-orqa tomoni)</i>\n\n"
+        "📜 <b>Ko'chmas mulk hujjatlarini online tekshirish</b>\n\n"
+        "Uy notariusga tayyormi, qarzlari bormi, taqiqda turibdimi — "
+        "hammasini bir zumda bilib oling:\n\n"
+        "🏛 Soliq qarzdorligi\n"
+        "📐 Kadastr — taqiq, arest, egalik huquqi\n"
+        "⚡️ Elektr energiyasi\n"
+        "🔥 Gaz · 💧 Suv · ♨️ Isitish\n"
+        "🏠 JEK · 🪪 Propiska · 🗑 Chiqindi\n\n"
         "─────────────────────\n"
-        "✅ Ushbu tekshiruv orqali notariusga borishdan oldin barcha xatarlarni kamaytirasiz.",
-        reply_markup=cancel_kb(),
+        "Xizmat turini tanlang 👇",
+        reply_markup=service_type_kb(),
         parse_mode="HTML",
     )
     await state.update_data(doc_type="savdo", doc_label="📄 Uy oldi-sottisi shartnomasi")
+    await state.set_state(NotaryStates.doc_type)
+
+
+@router.callback_query(NotaryStates.doc_type, F.data.startswith("nt_svc:"))
+async def notary_service_pick(cb: CallbackQuery, state: FSMContext):
+    svc = cb.data.split(":")[1]
+    fee = NOTARY_FEE if svc == "basic" else NOTARY_FEE_PREMIUM
+    await state.update_data(service_type=svc, notary_fee=fee)
+
+    if svc == "premium":
+        await cb.message.edit_text(
+            f"{PREMIUM_INCLUDES}\n\n"
+            f"💳 <b>Narx: {NOTARY_FEE_PREMIUM}</b>\n\n"
+            "📎 Hujjatlarning sifatli rasmini yuboring:\n"
+            "1️⃣ Egalik huquqini tasdiqlovchi hujjat\n"
+            "2️⃣ Kadastr ko'chirmasi\n"
+            "3️⃣ Pasport yoki ID karta (oldi-orqa)",
+            reply_markup=None,
+            parse_mode="HTML",
+        )
+    else:
+        await cb.message.edit_text(
+            "⚡️ <b>Asosiy tekshiruv</b>\n\n"
+            "Soliq, kadastr, kommunal xizmatlar va propiska tekshiriladi.\n\n"
+            f"💳 <b>Narx: {NOTARY_FEE}</b>\n\n"
+            "📎 Hujjatlarning sifatli rasmini yuboring:\n"
+            "1️⃣ Egalik huquqini tasdiqlovchi hujjat\n"
+            "2️⃣ Kadastr ko'chirmasi\n"
+            "3️⃣ Pasport yoki ID karta (oldi-orqa)",
+            reply_markup=None,
+            parse_mode="HTML",
+        )
+    await cb.message.answer("Bekor qilish:", reply_markup=cancel_kb())
     await state.set_state(NotaryStates.upload_doc)
+    await cb.answer()
 
 
 @router.callback_query(NotaryStates.doc_type, F.data.startswith("nt_dt:"))
@@ -448,11 +487,14 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
         notary_ids = list(set(ADMIN_IDS + await db.get_admin_ids()))
 
     # Notariusga to'liq zayavka xabari
+    svc = data.get("service_type", "basic")
+    fee = data.get("notary_fee", NOTARY_FEE)
+    svc_label = "⚡️ Asosiy" if svc == "basic" else "🏆 To'liq ekspertiza"
     notary_text = (
         f"📜 <b>Yangi zayavka #{order_id}</b>\n\n"
         f"👤 Mijoz: {sender} | {full_name}\n"
-        f"📋 Hujjat: <b>{data.get('doc_label', '')}</b>\n"
-        f"💳 To'lov: <b>{NOTARY_FEE}</b> — chek yuborilgan\n"
+        f"📋 Xizmat: <b>{svc_label}</b>\n"
+        f"💳 To'lov: <b>{fee}</b> — chek yuborilgan\n"
         f"📅 Vaqt: {now}\n\n"
         "⬇️ Hujjat va to'lov cheki quyida:"
     )
@@ -493,11 +535,28 @@ async def notary_send(cb: CallbackQuery, state: FSMContext):
         except Exception:
             pass
 
+    svc = data.get("service_type", "basic")
+    fee = data.get("notary_fee", NOTARY_FEE)
+    svc_label = "⚡️ Asosiy tekshiruv" if svc == "basic" else "🏆 To'liq ekspertiza"
+
+    # B2B taklifi — makler bo'lsa chegirma haqida xabardor qil
+    user_role = user.get("role", "") if user else ""
+    b2b_note = ""
+    if user_role == "makler":
+        b2b_note = (
+            "\n\n💼 <b>Makler chegirmasi:</b> Har oyda 10+ tekshiruv "
+            "uchun maxsus narxlar. Admin bilan bog'laning."
+        )
+
     await cb.message.edit_text(
         f"✅ <b>Zayavka #{order_id} qabul qilindi!</b>\n\n"
-        "Notarius hujjatlaringizni ko'rib chiqadi va natija haqida "
-        "bot orqali xabar beriladi.\n\n"
-        f"📋 Zayavka raqamingiz: <b>#{order_id}</b>",
+        f"📋 Xizmat: <b>{svc_label}</b>\n"
+        f"💳 To'lov: <b>{fee}</b>\n\n"
+        "Notarius 24-48 soat ichida hujjatlaringizni ko'rib chiqadi "
+        "va natija bot orqali yuboriladi.\n\n"
+        f"📌 Zayavka raqamingiz: <b>#{order_id}</b>"
+        + b2b_note
+        + DISCLAIMER,
         parse_mode="HTML",
     )
     await state.clear()
@@ -635,7 +694,8 @@ async def notary_worker_result_photo(msg: Message, state: FSMContext):
             await msg.bot.send_message(
                 order["user_id"],
                 f"✅ <b>Zayavka #{order_id} bajarildi!</b>\n\n"
-                "Notarius tekshirilgan hujjatlaringizni yubordi 👇",
+                "Notarius tekshirilgan hujjatlaringizni yubordi 👇"
+                + DISCLAIMER,
                 parse_mode="HTML",
             )
             for fid in saved_fids:
