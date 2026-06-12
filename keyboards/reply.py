@@ -33,10 +33,12 @@ def location_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def main_menu_kb(role: str = "buyer") -> ReplyKeyboardMarkup:
+def main_menu_kb(role: str = "buyer", is_owner: bool = False) -> ReplyKeyboardMarkup:
+    owner_row = [[KeyboardButton(text="👑 Boshqaruv paneli")]] if is_owner else []
+
     if role == "seller":
         return ReplyKeyboardMarkup(
-            keyboard=[
+            keyboard=owner_row + [
                 [KeyboardButton(text="➕ E'lon joylash")],
                 [KeyboardButton(text="📋 Mening e'lonlarim"), KeyboardButton(text="🔍 Qidirish")],
                 [KeyboardButton(text="📜 Uy hujjatlarini tekshirish"), KeyboardButton(text="🏢 Tashkilotlar")],
@@ -46,7 +48,7 @@ def main_menu_kb(role: str = "buyer") -> ReplyKeyboardMarkup:
             resize_keyboard=True,
         )
     return ReplyKeyboardMarkup(
-        keyboard=[
+        keyboard=owner_row + [
             [KeyboardButton(text="🔍 Uy qidirish")],
             [KeyboardButton(text="❤️ Sevimlilar")],
             [KeyboardButton(text="➕ E'lon joylash")],
