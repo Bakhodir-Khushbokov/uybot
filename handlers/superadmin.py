@@ -78,20 +78,31 @@ async def ow_stats(cb: CallbackQuery):
 
     text = (
         "📊 <b>Statistika</b>\n\n"
-        f"👤 Foydalanuvchilar: <b>{stats.get('users', 0)}</b>\n"
-        f"🏠 E'lonlar jami: <b>{stats.get('listings', 0)}</b>\n"
-        f"✅ Faol e'lonlar: <b>{stats.get('active_listings', 0)}</b>\n"
-        f"⏳ Kutilmoqda: <b>{stats.get('pending_listings', 0)}</b>\n"
-        f"📍 Lokatsiyalar: <b>{stats.get('locations', 0)}</b>\n"
-        f"🏢 Binolar: <b>{stats.get('buildings', 0)}</b>\n"
-        f"👨‍💼 Sub-adminlar: <b>{len(admins)}</b>\n\n"
-        f"📜 <b>Notariat zayavkalari:</b>\n"
-        f"   🆕 Yangi: <b>{nstats.get('new', 0)}</b>\n"
-        f"   💳 To'lov tekshiruvida: <b>{nstats.get('payment_check', 0)}</b>\n"
-        f"   ✅ Bajarildi: <b>{nstats.get('done', 0)}</b>\n"
-        f"   ❌ Rad etildi: <b>{nstats.get('rejected', 0)}</b>\n"
-        f"   📋 Jami: <b>{nstats.get('total', 0)}</b>\n"
-    )
+
+        "👥 <b>Foydalanuvchilar:</b>\n"
+        f"   Jami: <b>{stats.get('users', 0)}</b>\n"
+        f"   Bugun qo'shildi: <b>{stats.get('today_users', 0)}</b>\n"
+        f"   7 kunda: <b>{stats.get('week_users', 0)}</b>\n"
+        f"   30 kunda: <b>{stats.get('month_users', 0)}</b>\n"
+        f"   🚫 Botni bloklagan: <b>{stats.get('blocked_users', 0)}</b>\n\n"
+
+        "🏠 <b>E'lonlar:</b>\n"
+        f"   Jami: <b>{stats.get('listings', 0)}</b>\n"
+        f"   Bugun: <b>{stats.get('today_listings', 0)}</b>\n"
+        f"   7 kunda: <b>{stats.get('week_listings', 0)}</b>\n"
+        f"   30 kunda: <b>{stats.get('month_listings', 0)}</b>\n"
+        f"   ✅ Faol: <b>{stats.get('active_listings', 0)}</b>  "
+        f"⏳ Kutilmoqda: <b>{stats.get('pending_listings', 0)}</b>\n\n"
+
+        "👨‍💼 <b>Xodimlar:</b> <b>{len_admins}</b>\n\n"
+
+        "📜 <b>Notariat:</b>\n"
+        f"   🆕 Yangi: <b>{nstats.get('new', 0)}</b>  "
+        f"⚙️ Jarayonda: <b>{nstats.get('processing', 0)}</b>\n"
+        f"   ✅ Bajarildi: <b>{nstats.get('done', 0)}</b>  "
+        f"❌ Rad: <b>{nstats.get('rejected', 0)}</b>  "
+        f"📋 Jami: <b>{nstats.get('total', 0)}</b>\n"
+    ).replace("{len_admins}", str(len(admins)))
     await cb.message.edit_text(text, reply_markup=owner_menu_kb(), parse_mode="HTML")
     await cb.answer()
 
@@ -475,8 +486,10 @@ async def ow_broadcast_send(msg: Message, state: FSMContext):
                 parse_mode="HTML",
             )
             sent += 1
+            await db.set_user_blocked(user["telegram_id"], False)
         except Exception:
             failed += 1
+            await db.set_user_blocked(user["telegram_id"], True)
 
     from config import OWNER_IDS
     from keyboards.reply import main_menu_kb

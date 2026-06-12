@@ -179,6 +179,17 @@ async def init_db():
         """)
         await db.commit()
 
+    # migrations
+    async with aiosqlite.connect(DB_PATH) as db:
+        for col, definition in [
+            ("is_blocked", "INTEGER DEFAULT 0"),
+        ]:
+            try:
+                await db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+                await db.commit()
+            except Exception:
+                pass
+
 
 # ─────────────────────────────────────────────────────────────
 #  Users
@@ -197,6 +208,15 @@ async def upsert_user(telegram_id: int, phone: str = None,
                 full_name = COALESCE(excluded.full_name, full_name),
                 username  = COALESCE(excluded.username,  username)
         """, (telegram_id, phone, language, role, full_name, username))
+        await db.commit()
+
+
+async def set_user_blocked(telegram_id: int, blocked: bool = True):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET is_blocked=? WHERE telegram_id=?",
+            (1 if blocked else 0, telegram_id)
+        )
         await db.commit()
 
 
@@ -549,10 +569,38 @@ async def get_stats() -> dict:
         pending  = (await (await db.execute("SELECT COUNT(*) FROM listings WHERE status='pending'")).fetchone())[0]
         locs     = (await (await db.execute("SELECT COUNT(*) FROM locations")).fetchone())[0]
         blds     = (await (await db.execute("SELECT COUNT(*) FROM buildings")).fetchone())[0]
+
+        today_l = (await (await db.execute(
+            "SELECT COUNT(*) FROM listings WHERE DATE(created_at)=DATE('now','localtime')"
+        )).fetchone())[0]
+        week_l = (await (await db.execute(
+            "SELECT COUNT(*) FROM listings WHERE created_at >= datetime('now','-7 days','localtime')"
+        )).fetchone())[0]
+        month_l = (await (await db.execute(
+            "SELECT COUNT(*) FROM listings WHERE created_at >= datetime('now','-30 days','localtime')"
+        )).fetchone())[0]
+
+        today_u = (await (await db.execute(
+            "SELECT COUNT(*) FROM users WHERE DATE(created_at)=DATE('now','localtime')"
+        )).fetchone())[0]
+        week_u = (await (await db.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-7 days','localtime')"
+        )).fetchone())[0]
+        month_u = (await (await db.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-30 days','localtime')"
+        )).fetchone())[0]
+
+        blocked_u = (await (await db.execute(
+            "SELECT COUNT(*) FROM users WHERE is_blocked=1"
+        )).fetchone())[0]
+
     return {
         "users": users, "listings": listings,
         "active_listings": active, "pending_listings": pending,
         "locations": locs, "buildings": blds,
+        "today_listings": today_l, "week_listings": week_l, "month_listings": month_l,
+        "today_users": today_u, "week_users": week_u, "month_users": month_u,
+        "blocked_users": blocked_u,
     }
 
 
