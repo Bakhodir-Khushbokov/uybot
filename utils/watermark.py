@@ -47,13 +47,19 @@ def add_photo_watermark(image_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+FFMPEG_PATH = (
+    "/Applications/Shutter Encoder.app/Contents/Resources/Library/ffmpeg"
+)
+
+
 async def add_video_watermark(input_bytes: bytes, ext: str = "mp4") -> bytes | None:
     """
     Videoga ffmpeg orqali watermark qo'shadi.
     ffmpeg topilmasa None qaytaradi (asl video ishlatiladi).
     """
     import shutil
-    if not shutil.which("ffmpeg"):
+    ffmpeg = shutil.which("ffmpeg") or (FFMPEG_PATH if os.path.exists(FFMPEG_PATH) else None)
+    if not ffmpeg:
         return None
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -64,7 +70,7 @@ async def add_video_watermark(input_bytes: bytes, ext: str = "mp4") -> bytes | N
             f.write(input_bytes)
 
         cmd = [
-            "ffmpeg", "-y", "-i", inp,
+            ffmpeg, "-y", "-i", inp,
             "-vf",
             f"drawtext=text='{WATERMARK_TEXT}':fontcolor=white:fontsize=36:"
             f"box=1:boxcolor=black@0.4:boxborderw=6:"
