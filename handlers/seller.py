@@ -1008,9 +1008,9 @@ async def _send_my_listings(chat_msg: Message, user_id: int, offset: int = 0):
               "sold": "🤝 Sotildi", "deleted": "❌ O'chirilgan"}
 
     await chat_msg.answer(
-        f"📋 *Sizning e'lonlaringiz:* {total} ta\n"
-        f"_({offset+1}–{min(offset+5, total)} ko'rsatilmoqda)_",
-        parse_mode="Markdown",
+        f"📋 <b>Sizning e'lonlaringiz:</b> {total} ta\n"
+        f"<i>({offset+1}–{min(offset+5, total)} ko'rsatilmoqda)</i>",
+        parse_mode="HTML",
     )
 
     for lst in chunk:
@@ -1018,7 +1018,7 @@ async def _send_my_listings(chat_msg: Message, user_id: int, offset: int = 0):
         status_label = STATUS.get(lst.get("status", ""), "❓")
 
         text = (
-            f"{status_label} | *E'lon #{lst['id']}*\n"
+            f"{status_label} | <b>E'lon #{lst['id']}</b>\n"
             f"{listing_full_card(lst, loc)}\n\n"
             f"👁 Ko'rishlar: {lst.get('views_count', 0)}   "
             f"📞 Aloqa: {lst.get('contact_count', 0)}"
@@ -1031,10 +1031,10 @@ async def _send_my_listings(chat_msg: Message, user_id: int, offset: int = 0):
                 video=lst["video_file_id"],
                 caption=text,
                 reply_markup=reply_kb,
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
         except Exception:
-            await chat_msg.answer(text, reply_markup=reply_kb, parse_mode="Markdown")
+            await chat_msg.answer(text, reply_markup=reply_kb, parse_mode="HTML")
 
     # Paginatsiya
     nav = []
