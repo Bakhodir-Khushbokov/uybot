@@ -909,13 +909,70 @@ async def update_notary_order(order_id: int, status: str,
 
 async def get_notary_stats() -> dict:
     async with aiosqlite.connect(DB_PATH) as db:
-        total   = (await (await db.execute("SELECT COUNT(*) FROM notary_orders")).fetchone())[0]
-        new_    = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='new'")).fetchone())[0]
-        payment = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='payment_check'")).fetchone())[0]
-        done    = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='done'")).fetchone())[0]
-        reject  = (await (await db.execute("SELECT COUNT(*) FROM notary_orders WHERE status='rejected'")).fetchone())[0]
-    return {"total": total, "new": new_, "payment_check": payment,
-            "done": done, "rejected": reject}
+        def q(where=""):
+            return f"SELECT COUNT(*) FROM notary_orders {where}"
+
+        total   = (await (await db.execute(q())).fetchone())[0]
+        new_    = (await (await db.execute(q("WHERE status='new'"))).fetchone())[0]
+        payment = (await (await db.execute(q("WHERE status='payment_check'"))).fetchone())[0]
+        proc    = (await (await db.execute(q("WHERE status='processing'"))).fetchone())[0]
+        done    = (await (await db.execute(q("WHERE status='done'"))).fetchone())[0]
+        reject  = (await (await db.execute(q("WHERE status='rejected'"))).fetchone())[0]
+
+        today_done  = (await (await db.execute(q("WHERE status='done' AND DATE(updated_at)=DATE('now','localtime')"))).fetchone())[0]
+        week_done   = (await (await db.execute(q("WHERE status='done' AND updated_at>=datetime('now','-7 days','localtime')"))).fetchone())[0]
+        month_done  = (await (await db.execute(q("WHERE status='done' AND updated_at>=datetime('now','-30 days','localtime')"))).fetchone())[0]
+
+        today_new   = (await (await db.execute(q("WHERE DATE(created_at)=DATE('now','localtime')"))).fetchone())[0]
+        week_new    = (await (await db.execute(q("WHERE created_at>=datetime('now','-7 days','localtime')"))).fetchone())[0]
+        month_new   = (await (await db.execute(q("WHERE created_at>=datetime('now','-30 days','localtime')"))).fetchone())[0]
+
+    return {
+        "total": total, "new": new_, "payment_check": payment,
+        "processing": proc, "done": done, "rejected": reject,
+        "today_done": today_done, "week_done": week_done, "month_done": month_done,
+        "today_new": today_new, "week_new": week_new, "month_new": month_new,
+    }
+
+
+async def get_staff_report() -> list[dict]:
+    """Har bir xodimning ish hisoboti."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        admins = await (await db.execute("SELECT * FROM admins ORDER BY added_at")).fetchall()
+        report = []
+        for a in admins:
+            tid  = a["telegram_id"]
+            role = a.get("role", "admin")
+            name = a.get("full_name") or a.get("username") or str(tid)
+
+            if role == "notarius":
+                total  = (await (await db.execute(
+                    "SELECT COUNT(*) FROM notary_orders WHERE assigned_to=?", (tid,)
+                )).fetchone())[0]
+                done   = (await (await db.execute(
+                    "SELECT COUNT(*) FROM notary_orders WHERE assigned_to=? AND status='done'", (tid,)
+                )).fetchone())[0]
+                reject = (await (await db.execute(
+                    "SELECT COUNT(*) FROM notary_orders WHERE assigned_to=? AND status='rejected'", (tid,)
+                )).fetchone())[0]
+                today  = (await (await db.execute(
+                    "SELECT COUNT(*) FROM notary_orders WHERE assigned_to=? AND DATE(updated_at)=DATE('now','localtime')", (tid,)
+                )).fetchone())[0]
+                report.append({
+                    "name": name, "role": role, "telegram_id": tid,
+                    "total": total, "done": done, "rejected": reject, "today": today,
+                })
+            else:
+                # Admin uchun: tasdiqlangan e'lonlar soni (agar admin e'lonlarni approve qilsa)
+                approved = (await (await db.execute(
+                    "SELECT COUNT(*) FROM listings WHERE status='active'"
+                )).fetchone())[0]
+                report.append({
+                    "name": name, "role": role, "telegram_id": tid,
+                    "approved_listings": approved,
+                })
+        return report
 
 
 async def save_feedback(user_id: int, sender: str, label: str, text: str):

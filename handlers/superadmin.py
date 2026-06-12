@@ -72,37 +72,57 @@ async def btn_owner_panel(msg: Message, state: FSMContext):
 @router.callback_query(OwnerStates.menu, F.data == "ow:stats")
 async def ow_stats(cb: CallbackQuery):
     if not is_owner(cb.from_user.id): return
-    stats   = await db.get_stats()
-    admins  = await db.get_all_admins()
-    nstats  = await db.get_notary_stats()
+    stats        = await db.get_stats()
+    admins       = await db.get_all_admins()
+    nstats       = await db.get_notary_stats()
+    staff_report = await db.get_staff_report()
 
     text = (
         "📊 <b>Statistika</b>\n\n"
 
         "👥 <b>Foydalanuvchilar:</b>\n"
-        f"   Jami: <b>{stats.get('users', 0)}</b>\n"
-        f"   Bugun qo'shildi: <b>{stats.get('today_users', 0)}</b>\n"
-        f"   7 kunda: <b>{stats.get('week_users', 0)}</b>\n"
-        f"   30 kunda: <b>{stats.get('month_users', 0)}</b>\n"
+        f"   Boshidan jami: <b>{stats.get('users', 0)}</b>\n"
+        f"   Bugun: <b>+{stats.get('today_users', 0)}</b>\n"
+        f"   7 kunda: <b>+{stats.get('week_users', 0)}</b>\n"
+        f"   30 kunda: <b>+{stats.get('month_users', 0)}</b>\n"
         f"   🚫 Botni bloklagan: <b>{stats.get('blocked_users', 0)}</b>\n\n"
 
         "🏠 <b>E'lonlar:</b>\n"
-        f"   Jami: <b>{stats.get('listings', 0)}</b>\n"
-        f"   Bugun: <b>{stats.get('today_listings', 0)}</b>\n"
-        f"   7 kunda: <b>{stats.get('week_listings', 0)}</b>\n"
-        f"   30 kunda: <b>{stats.get('month_listings', 0)}</b>\n"
+        f"   Boshidan jami: <b>{stats.get('listings', 0)}</b>\n"
+        f"   Bugun: <b>+{stats.get('today_listings', 0)}</b>\n"
+        f"   7 kunda: <b>+{stats.get('week_listings', 0)}</b>\n"
+        f"   30 kunda: <b>+{stats.get('month_listings', 0)}</b>\n"
         f"   ✅ Faol: <b>{stats.get('active_listings', 0)}</b>  "
         f"⏳ Kutilmoqda: <b>{stats.get('pending_listings', 0)}</b>\n\n"
 
-        "👨‍💼 <b>Xodimlar:</b> <b>{len_admins}</b>\n\n"
-
-        "📜 <b>Notariat:</b>\n"
-        f"   🆕 Yangi: <b>{nstats.get('new', 0)}</b>  "
+        "📜 <b>Notariat tekshiruvi:</b>\n"
+        f"   Boshidan jami: <b>{nstats.get('total', 0)}</b>\n"
+        f"   Bugun bajarildi: <b>{nstats.get('today_done', 0)}</b>\n"
+        f"   7 kunda bajarildi: <b>{nstats.get('week_done', 0)}</b>\n"
+        f"   30 kunda bajarildi: <b>{nstats.get('month_done', 0)}</b>\n"
+        f"   🆕 Yangi: <b>{nstats.get('today_new', 0)}</b> (bugun keldi)  "
         f"⚙️ Jarayonda: <b>{nstats.get('processing', 0)}</b>\n"
         f"   ✅ Bajarildi: <b>{nstats.get('done', 0)}</b>  "
-        f"❌ Rad: <b>{nstats.get('rejected', 0)}</b>  "
-        f"📋 Jami: <b>{nstats.get('total', 0)}</b>\n"
-    ).replace("{len_admins}", str(len(admins)))
+        f"❌ Rad: <b>{nstats.get('rejected', 0)}</b>\n\n"
+
+        f"👨‍💼 <b>Xodimlar ({len(admins)} ta):</b>\n"
+    )
+
+    for s in staff_report:
+        role_icon = "📜" if s["role"] == "notarius" else "👨‍💼"
+        if s["role"] == "notarius":
+            text += (
+                f"\n{role_icon} <b>{s['name']}</b> (Notarius)\n"
+                f"   Bugun: <b>{s['today']}</b>  "
+                f"✅ Jami bajarildi: <b>{s['done']}</b>  "
+                f"❌ Rad: <b>{s['rejected']}</b>  "
+                f"📋 Jami: <b>{s['total']}</b>\n"
+            )
+        else:
+            text += (
+                f"\n{role_icon} <b>{s['name']}</b> (Admin)\n"
+                f"   Faol e'lonlar: <b>{s.get('approved_listings', 0)}</b>\n"
+            )
     await cb.message.edit_text(text, reply_markup=owner_menu_kb(), parse_mode="HTML")
     await cb.answer()
 
