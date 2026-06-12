@@ -538,6 +538,54 @@ async def report_reason_cb(cb: CallbackQuery, state: FSMContext):
                 pass
 
 
+async def _notify_report(bot, listing_id: int, reporter, reason_text: str, total: int):
+    from config import ADMIN_IDS
+    reporter_info = f"@{reporter.username}" if reporter.username else f"#{reporter.id}"
+    alert_text = (
+        f"🚩 <b>Shikoyat #{total}</b> | E'lon #{listing_id}\n"
+        f"Sabab: {reason_text}\n"
+        f"Kim: {reporter_info}\n"
+    )
+    if total >= 5:
+        alert_text += "\n🔴 <b>E'lon avtomatik bloklandi!</b>"
+    elif total == 3:
+        alert_text += "\n⚠️ <b>3 ta shikoyat — tekshiring!</b>"
+    if total >= 3:
+        for admin_id in ADMIN_IDS:
+            try:
+                await bot.send_message(admin_id, alert_text, parse_mode="HTML")
+            except Exception:
+                pass
+
+
+@router.message(BuyerStates.report_text)
+async def report_custom_text(msg: Message, state: FSMContext):
+    text = (msg.text or "").strip()
+    if not text or len(text) < 3:
+        await msg.answer("Iltimos, kamida 3 ta belgi kiriting.")
+        return
+
+    data = await state.get_data()
+    listing_id = data.get("report_listing_id")
+    if not listing_id:
+        await state.clear()
+        return
+
+    reason_text = f"✏️ Boshqa: {text[:200]}"
+    result = await db.add_report(listing_id, msg.from_user.id, reason_text)
+    await state.clear()
+
+    if not result["added"]:
+        await msg.answer("Siz bu e'longa allaqachon shikoyat qilgansiz.")
+        return
+
+    await msg.answer(
+        f"✅ <b>Shikoyatingiz qabul qilindi.</b>\n\nSabab: {reason_text}\n\nRahmat, biz ko'rib chiqamiz!",
+        parse_mode="HTML",
+    )
+    await _notify_report(msg.bot, listing_id, msg.from_user, reason_text, result["total"])
+
+
 # ── Restart search from results nav ─────────────────────────────
 @router.callback_query(F.data == "br:restart")
 async def restart_search(cb: CallbackQuery, state: FSMContext):
