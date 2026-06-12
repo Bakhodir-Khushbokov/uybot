@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from handlers.states import RegStates
 from keyboards.inline import lang_kb, role_kb
 from keyboards.reply  import phone_kb, main_menu_kb, cancel_kb
+from config import OWNER_IDS
 import database as db
 
 router = Router()
@@ -25,7 +26,7 @@ async def cmd_start(msg: Message, state: FSMContext):
         role = user.get("role", "buyer")
         await msg.answer(
             f"Xush kelibsiz, <b>{msg.from_user.first_name}</b>! 👋",
-            reply_markup=main_menu_kb(role),
+            reply_markup=main_menu_kb(role, is_owner=msg.from_user.id in OWNER_IDS),
         )
         return
 
@@ -84,7 +85,7 @@ async def choose_role(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_text("✅ Ro'yxatdan o'tdingiz!")
     await cb.message.answer(
         "Asosiy menyu 👇",
-        reply_markup=main_menu_kb(role),
+        reply_markup=main_menu_kb(role, is_owner=cb.from_user.id in OWNER_IDS),
     )
     await cb.answer()
 
@@ -95,7 +96,7 @@ async def cancel_any(msg: Message, state: FSMContext):
     await state.clear()
     user = await db.get_user(msg.from_user.id)
     role = user.get("role", "buyer") if user else "buyer"
-    await msg.answer("Bekor qilindi.", reply_markup=main_menu_kb(role))
+    await msg.answer("Bekor qilindi.", reply_markup=main_menu_kb(role, is_owner=msg.from_user.id in OWNER_IDS))
 
 
 # ── /help ────────────────────────────────────────────────────

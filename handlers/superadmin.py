@@ -23,6 +23,7 @@ router = Router()
 class OwnerStates(StatesGroup):
     menu        = State()
     add_admin   = State()
+    broadcast   = State()
 
 
 def is_owner(user_id: int) -> bool:
@@ -31,28 +32,40 @@ def is_owner(user_id: int) -> bool:
 
 def owner_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Statistika",           callback_data="ow:stats")],
-        [InlineKeyboardButton(text="📜 Notariat zayavkalari", callback_data="ow:notary")],
-        [InlineKeyboardButton(text="🏢 Tashkilotlar",         callback_data="ow:orgs")],
-        [InlineKeyboardButton(text="👥 Adminlar ro'yxati",    callback_data="ow:admins")],
-        [InlineKeyboardButton(text="➕ Admin qo'shish",       callback_data="ow:add_admin")],
-        [InlineKeyboardButton(text="💬 Takliflar",             callback_data="ow:feedback")],
+        [InlineKeyboardButton(text="📊 Statistika",            callback_data="ow:stats")],
+        [InlineKeyboardButton(text="👥 Xodimlar",              callback_data="ow:admins"),
+         InlineKeyboardButton(text="➕ Xodim qo'shish",        callback_data="ow:add_admin")],
+        [InlineKeyboardButton(text="📜 Notariat zayavkalari",  callback_data="ow:notary")],
+        [InlineKeyboardButton(text="🏢 Tashkilotlar",          callback_data="ow:orgs")],
+        [InlineKeyboardButton(text="💬 Shikoyat va takliflar", callback_data="ow:feedback")],
+        [InlineKeyboardButton(text="📢 Hammaga xabar yuborish",callback_data="ow:broadcast")],
     ])
 
 
-# ── /owner ───────────────────────────────────────────────────
+# ── /owner yoki tugma ────────────────────────────────────────
+async def _open_owner_panel(msg: Message, state: FSMContext):
+    await state.clear()
+    await msg.answer(
+        "👑 <b>Boshqaruv paneli</b>\n\nXush kelibsiz!",
+        reply_markup=owner_menu_kb(),
+        parse_mode="HTML",
+    )
+    await state.set_state(OwnerStates.menu)
+
+
 @router.message(Command("owner"))
 async def cmd_owner(msg: Message, state: FSMContext):
     if not is_owner(msg.from_user.id):
         await msg.answer("⛔️ Ruxsat yo'q.")
         return
-    await state.clear()
-    await msg.answer(
-        "👑 <b>Super-admin panel</b>\n\nXush kelibsiz!",
-        reply_markup=owner_menu_kb(),
-        parse_mode="HTML",
-    )
-    await state.set_state(OwnerStates.menu)
+    await _open_owner_panel(msg, state)
+
+
+@router.message(F.text == "👑 Boshqaruv paneli")
+async def btn_owner_panel(msg: Message, state: FSMContext):
+    if not is_owner(msg.from_user.id):
+        return
+    await _open_owner_panel(msg, state)
 
 
 # ── Statistika ───────────────────────────────────────────────
@@ -432,6 +445,52 @@ async def ow_feedback(cb: CallbackQuery):
         )
     await cb.message.edit_text(text, reply_markup=owner_menu_kb(), parse_mode="HTML")
     await cb.answer()
+
+
+# ── Broadcast ───────────────────────────────────────────────
+@router.callback_query(OwnerStates.menu, F.data == "ow:broadcast")
+async def ow_broadcast_start(cb: CallbackQuery, state: FSMContext):
+    if not is_owner(cb.from_user.id): return
+    await cb.message.edit_text(
+        "📢 <b>Hammaga xabar yuborish</b>\n\n"
+        "Yubormoqchi bo'lgan xabarni yozing.\n"
+        "<i>Bekor qilish uchun /owner yozing</i>",
+        parse_mode="HTML",
+    )
+    await state.set_state(OwnerStates.broadcast)
+    await cb.answer()
+
+
+@router.message(OwnerStates.broadcast)
+async def ow_broadcast_send(msg: Message, state: FSMContext):
+    if not is_owner(msg.from_user.id): return
+    users = await db.get_all_users()
+    sent = 0
+    failed = 0
+    for user in users:
+        try:
+            await msg.bot.send_message(
+                user["telegram_id"],
+                f"📢 <b>UyJoy botidan xabar:</b>\n\n{msg.text}",
+                parse_mode="HTML",
+            )
+            sent += 1
+        except Exception:
+            failed += 1
+
+    from config import OWNER_IDS
+    from keyboards.reply import main_menu_kb
+    user_db = await db.get_user(msg.from_user.id)
+    role = user_db.get("role", "buyer") if user_db else "buyer"
+    await msg.answer(
+        f"✅ Xabar yuborildi!\n\n"
+        f"📨 Yetdi: <b>{sent}</b> ta\n"
+        f"❌ Yetmadi: <b>{failed}</b> ta (bot bloklagan)",
+        reply_markup=main_menu_kb(role, is_owner=True),
+        parse_mode="HTML",
+    )
+    await state.set_state(OwnerStates.menu)
+    await msg.answer("👑 Boshqaruv paneli:", reply_markup=owner_menu_kb())
 
 
 # ── Ortga ────────────────────────────────────────────────────
