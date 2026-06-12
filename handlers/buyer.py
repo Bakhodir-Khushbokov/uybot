@@ -51,21 +51,14 @@ async def buyer_property_type(cb: CallbackQuery, state: FSMContext):
     pt = cb.data.split(":")[1]
     await state.update_data(property_type=pt)
     viloyatlar = await db.get_viloyatlar()
-    sorted_vils = _sort_viloyatlar(viloyatlar)
     await cb.message.edit_text(
         "📍 Viloyatni tanlang:",
-        reply_markup=viloyat_kb(sorted_vils, "bv"),
+        reply_markup=viloyat_kb(viloyatlar, "bv"),
     )
     await state.set_state(BuyerStates.viloyat)
     await cb.answer()
 
 
-def _sort_viloyatlar(viloyatlar: list[str]) -> list[str]:
-    """Toshkent shahri 1-chi, Toshkent viloyati 2-chi, qolganlari alifbo."""
-    priority = ["Toshkent shahri", "Toshkent viloyati"]
-    top    = [v for v in priority if v in viloyatlar]
-    rest   = sorted([v for v in viloyatlar if v not in priority])
-    return top + rest
 
 
 @router.callback_query(BuyerStates.location_choice, F.data == "bc:cancel")

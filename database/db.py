@@ -241,9 +241,13 @@ async def get_user(telegram_id: int) -> dict | None:
 # ─────────────────────────────────────────────────────────────
 async def get_viloyatlar() -> list[str]:
     async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("SELECT DISTINCT viloyat FROM locations ORDER BY viloyat")
+        cur = await db.execute("SELECT DISTINCT viloyat FROM locations")
         rows = await cur.fetchall()
-        return [r[0] for r in rows]
+    all_v = [r[0] for r in rows]
+    priority = ["Toshkent shahri", "Toshkent viloyati"]
+    top  = [v for v in priority if v in all_v]
+    rest = sorted([v for v in all_v if v not in priority])
+    return top + rest
 
 
 async def get_tumanlar(viloyat: str) -> list[str]:
