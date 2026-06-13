@@ -1020,6 +1020,7 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
         "phone":            user.get("phone") if user else "",
         "kvartal":          data.get("kvartal"),
         "dom_number":       data.get("dom_number"),
+        "tuman":            data.get("tuman"),
     }
 
     listing_id = await db.add_listing(listing_data)

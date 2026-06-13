@@ -395,8 +395,8 @@ async def add_listing(data: dict) -> int:
                lat, lon, video_file_id, xonalar, renovation, floor, total_floors,
                area, landmark, price_amount, price_currency, price_display, phone,
                transaction_type, rent_for, jihoz, balkon, has_commission,
-               kvartal, dom_number)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               kvartal, dom_number, tuman)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             data["seller_id"], data["property_type"], data.get("dom_type"),
             data.get("location_id"), data.get("building_id"),
@@ -409,7 +409,7 @@ async def add_listing(data: dict) -> int:
             data.get("transaction_type", "sotish"), data.get("rent_for"),
             data.get("jihoz"), data.get("balkon"),
             1 if data.get("has_commission") else 0,
-            data.get("kvartal"), data.get("dom_number"),
+            data.get("kvartal"), data.get("dom_number"), data.get("tuman"),
         ))
         await db.commit()
         return cur.lastrowid

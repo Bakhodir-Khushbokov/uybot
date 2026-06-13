@@ -173,14 +173,20 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
 
     # 2. Joylashuv
     addr_parts = []
-    if loc:
-        viloyat = loc.get("viloyat", "")
-        tuman   = loc.get("tuman", "").replace(" tumani","").replace(" shahri","")
-        mahalla = loc.get("mahalla", "")
-        if viloyat: addr_parts.append(viloyat)
-        if tuman:   addr_parts.append(tuman)
-        if mahalla: addr_parts.append(mahalla)
-    # kvartal va dom_number (yangi tizim)
+    # Viloyat
+    if loc and loc.get("viloyat"):
+        addr_parts.append(loc["viloyat"])
+    elif lst.get("tuman"):
+        addr_parts.append("Toshkent shahri")
+    # Tuman
+    if lst.get("tuman"):
+        addr_parts.append(lst["tuman"])
+    elif loc and loc.get("tuman"):
+        addr_parts.append(loc["tuman"])
+    # Mahalla (eski tizim)
+    if loc and loc.get("mahalla") and not lst.get("kvartal"):
+        addr_parts.append(loc["mahalla"])
+    # Kvartal va dom (yangi tizim)
     if lst.get("kvartal"):
         addr_parts.append(lst["kvartal"])
     if lst.get("dom_number"):
