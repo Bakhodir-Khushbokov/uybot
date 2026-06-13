@@ -43,9 +43,12 @@ def format_price(amount: float, currency: str, rent_period: str = None) -> str:
     So'm: 350_000_000 → 350 mln so'm
           1_200_000_000 → 1.2 mlrd so'm
     """
+    def spacify(n: int) -> str:
+        return f"{n:,}".replace(",", " ")
+
     suffix = RENT_PERIOD_LABELS.get(rent_period, "") if rent_period else ""
     if currency == "usd":
-        return f"{int(amount)}${suffix}"
+        return f"{spacify(int(amount))} ${suffix}"
     else:
         n = int(amount)
         if n >= 1_000_000_000:
@@ -55,11 +58,7 @@ def format_price(amount: float, currency: str, rent_period: str = None) -> str:
                 return f"{mlrd} mlrd {qolgan_mln} mln so'm{suffix}"
             return f"{mlrd} mlrd so'm{suffix}"
         else:
-            mln = n // 1_000_000
-            qolgan = (n % 1_000_000) // 1_000
-            if qolgan:
-                return f"{mln} mln {qolgan} ming so'm{suffix}"
-            return f"{mln} mln so'm{suffix}"
+            return f"{spacify(n)} so'm{suffix}"
 
 
 def parse_price_usd(text: str) -> float | None:
