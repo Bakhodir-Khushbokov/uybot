@@ -144,10 +144,27 @@ async def seller_kvartal_pick(cb: CallbackQuery, state: FSMContext):
     kvartal = f"{kvartal_n}-kvartal"
     data = await state.get_data()
     tuman = data["tuman"]
-    await state.update_data(kvartal=kvartal, mahalla_name=kvartal, str_offset=0, str_query="")
-    await _show_streets(cb.message, state, tuman, kvartal)
-    await state.set_state(SellerStates.street_page)
+    await state.update_data(kvartal=kvartal, mahalla_name=kvartal)
+    await _show_doms(cb.message, state, tuman, kvartal)
+    await state.set_state(SellerStates.dom_number)
     await cb.answer()
+
+
+async def _show_doms(msg, state: FSMContext, tuman: str, kvartal: str, edit: bool = True):
+    doms = await db.get_doms_by_kvartal(tuman, kvartal)
+    data = await state.get_data()
+    offset = data.get("dom_offset", 0)
+    PAGE = 20
+    page_doms = doms[offset: offset + PAGE]
+    total = len(doms)
+
+    from keyboards.inline import dom_kb as _dom_kb
+    kb = _dom_kb(page_doms, offset, total)
+    text = f"🏠 <b>{tuman}, {kvartal}</b>\n\nDom raqamini tanlang ({total} ta):"
+    if edit:
+        await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        await msg.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(SellerStates.kvartal_page, F.data == "cancel")
@@ -248,17 +265,21 @@ async def seller_dom_pick(cb: CallbackQuery, state: FSMContext):
         return
     if dom == "back":
         data = await state.get_data()
-        await _show_streets(cb.message, state, data["tuman"], data.get("kvartal", ""))
-        await state.set_state(SellerStates.street_page)
+        await _show_doms(cb.message, state, data["tuman"], data.get("kvartal", ""))
+        await cb.answer()
+        return
+    if dom.startswith("page:"):
+        offset = int(dom[5:])
+        await state.update_data(dom_offset=offset)
+        data = await state.get_data()
+        await _show_doms(cb.message, state, data["tuman"], data.get("kvartal", ""))
         await cb.answer()
         return
     data = await state.get_data()
     tuman = data["tuman"]
     kvartal = data.get("kvartal", "")
-    street = data.get("street", "")
-    # Koordinatni bazadan ol
-    coords = await db.get_address_coords(tuman, kvartal, street, dom)
-    address_label = f"{tuman}, {kvartal}, {street.title()}, {dom}-uy"
+    coords = await db.get_dom_coords(tuman, kvartal, dom)
+    address_label = f"{tuman}, {kvartal}, {dom}-uy"
     await state.update_data(
         dom_number=dom,
         mahalla_name=address_label,

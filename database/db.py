@@ -1150,3 +1150,38 @@ async def get_address_coords(tuman: str, kvartal: str, street: str, house_number
         if row2:
             return {"lat": row2[0], "lon": row2[1]}
         return None
+
+
+async def get_doms_by_kvartal(tuman: str, kvartal: str) -> list[dict]:
+    """Kvartal bo'yicha uy raqamlari (buildings jadvalidan, natural sort)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        rows = await (await db.execute(
+            """SELECT DISTINCT dom_number, lat, lon FROM buildings b
+               JOIN locations l ON b.location_id = l.id
+               WHERE l.tuman=? AND b.kvartal=?
+               ORDER BY dom_number""",
+            (tuman, kvartal),
+        )).fetchall()
+
+    def nat_key(d):
+        import re
+        m = re.match(r'^(\d+)(.*)', d["dom_number"])
+        return (int(m.group(1)), m.group(2).lower()) if m else (9999, d["dom_number"].lower())
+
+    return sorted(
+        [{"dom_number": r[0], "lat": r[1], "lon": r[2]} for r in rows],
+        key=nat_key
+    )
+
+
+async def get_dom_coords(tuman: str, kvartal: str, dom_number: str) -> dict | None:
+    """Dom raqami bo'yicha koordinata."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        row = await (await db.execute(
+            """SELECT lat, lon FROM buildings b
+               JOIN locations l ON b.location_id = l.id
+               WHERE l.tuman=? AND b.kvartal=? AND b.dom_number=?
+               LIMIT 1""",
+            (tuman, kvartal, dom_number),
+        )).fetchone()
+        return {"lat": row[0], "lon": row[1]} if row else None
