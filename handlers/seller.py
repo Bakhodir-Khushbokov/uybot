@@ -298,8 +298,8 @@ async def seller_dom_pick(cb: CallbackQuery, state: FSMContext):
 @router.callback_query(SellerStates.dom_number, F.data == "dom_back")
 async def seller_dom_back(cb: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    await _show_streets(cb.message, state, data["tuman"], data.get("kvartal", ""))
-    await state.set_state(SellerStates.street_page)
+    await state.update_data(dom_offset=0)
+    await _show_doms(cb.message, state, data["tuman"], data.get("kvartal", ""))
     await cb.answer()
 
 
