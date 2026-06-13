@@ -1018,6 +1018,8 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
         "jihoz":            __import__("json").dumps(data.get("jihoz_selected") or [], ensure_ascii=False) if data.get("jihoz_selected") else None,
         "has_commission":   data.get("has_commission", False),
         "phone":            user.get("phone") if user else "",
+        "kvartal":          data.get("kvartal"),
+        "dom_number":       data.get("dom_number"),
     }
 
     listing_id = await db.add_listing(listing_data)
