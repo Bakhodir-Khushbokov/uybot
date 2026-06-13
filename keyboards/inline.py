@@ -446,8 +446,7 @@ def street_kb(streets: list[str], offset: int = 0, total: int = 0, show_search: 
 
 # ── Dom raqami tugmalari ──────────────────────────────────────
 def dom_kb(houses: list[dict], offset: int = 0, total: int = 0) -> InlineKeyboardMarkup:
-    """Dom raqamlari tugmalari — sahifalash bilan."""
-    PAGE = 20
+    """Dom raqamlari tugmalari — hammasi bir sahifada, scroll qiladi."""
     rows = []
     row = []
     for h in houses:
@@ -458,19 +457,6 @@ def dom_kb(houses: list[dict], offset: int = 0, total: int = 0) -> InlineKeyboar
             row = []
     if row:
         rows.append(row)
-
-    nav = []
-    if offset > 0:
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"dom:page:{offset - PAGE}"))
-    if total > 0:
-        page = offset // PAGE + 1
-        total_pages = (total + PAGE - 1) // PAGE
-        nav.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop"))
-    if offset + PAGE < total:
-        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"dom:page:{offset + PAGE}"))
-    if nav:
-        rows.append(nav)
-
     rows.append([InlineKeyboardButton(text="✏️ Qo'lda yozish", callback_data="dom:manual")])
     rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data="dom:back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

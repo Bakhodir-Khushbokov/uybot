@@ -152,15 +152,9 @@ async def seller_kvartal_pick(cb: CallbackQuery, state: FSMContext):
 
 async def _show_doms(msg, state: FSMContext, tuman: str, kvartal: str, edit: bool = True):
     doms = await db.get_doms_by_kvartal(tuman, kvartal)
-    data = await state.get_data()
-    offset = data.get("dom_offset", 0)
-    PAGE = 20
-    page_doms = doms[offset: offset + PAGE]
-    total = len(doms)
-
     from keyboards.inline import dom_kb as _dom_kb
-    kb = _dom_kb(page_doms, offset, total)
-    text = f"🏠 <b>{tuman}, {kvartal}</b>\n\nDom raqamini tanlang ({total} ta):"
+    kb = _dom_kb(doms)
+    text = f"🏠 <b>{tuman}, {kvartal}</b>\n\nDom raqamini tanlang ({len(doms)} ta):"
     if edit:
         await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
     else:
