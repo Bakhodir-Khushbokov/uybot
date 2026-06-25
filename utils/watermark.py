@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Rasm va videoga watermark qo'shish.
 Bot username avtomatik olinadi — o'zgarganda hamma joyda yangilanadi.

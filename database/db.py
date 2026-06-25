@@ -1,3 +1,4 @@
+from __future__ import annotations
 import aiosqlite
 import json
 from config import DB_PATH

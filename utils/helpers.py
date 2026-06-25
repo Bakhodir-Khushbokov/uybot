@@ -1,3 +1,4 @@
+from __future__ import annotations
 from config import BANNED_WORDS
 
 PROPERTY_LABELS = {
