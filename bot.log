@@ -1,0 +1,7 @@
+2026-06-08 22:27:22,806 [INFO] __main__: ✅ Database tayyor.
+2026-06-08 22:27:22,818 [INFO] __main__: 🤖 Bot ishga tushdi. Ctrl+C bilan to'xtating.
+2026-06-08 22:27:22,818 [INFO] aiogram.dispatcher: Start polling
+2026-06-08 22:27:23,611 [INFO] aiogram.dispatcher: Run polling for bot @uylararzonbot id=7752768203 - 'Pandabot'
+2026-06-08 22:29:20,590 [INFO] aiogram.event: Update id=898028850 is handled. Duration 836 ms by bot id=7752768203
+2026-06-08 22:29:30,125 [INFO] aiogram.event: Update id=898028851 is handled. Duration 249 ms by bot id=7752768203
+2026-06-08 22:30:06,697 [INFO] aiogram.event: Update id=898028852 is handled. Duration 2111 ms by bot id=7752768203
