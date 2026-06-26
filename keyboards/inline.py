@@ -259,7 +259,7 @@ def xonalar_kb(prefix: str = "xon", with_any: bool = False,
 
 
 # ── Qavat tanlash (floor) ────────────────────────────────────
-def floor_kb(prefix: str = "fl", page: int = 0) -> InlineKeyboardMarkup:
+def floor_kb(prefix: str = "fl", page: int = 0, qavatli: bool = False) -> InlineKeyboardMarkup:
     """
     page=0 → 1–16   + "➕ Yana (17–32)"
     page=1 → 17–32  + "➕ Yana (33–46)"  + "⬅️ Kamroq"
@@ -273,7 +273,8 @@ def floor_kb(prefix: str = "fl", page: int = 0) -> InlineKeyboardMarkup:
     else:
         nums = range(33, 47)
 
-    chunk = [InlineKeyboardButton(text=f"{n}-qavat", callback_data=f"{prefix}:{n}")
+    label = "{n}qavatli" if qavatli else "{n}-qavat"
+    chunk = [InlineKeyboardButton(text=label.format(n=n), callback_data=f"{prefix}:{n}")
              for n in nums]
     # 4 ta ustun
     for i in range(0, len(chunk), 4):
