@@ -201,7 +201,7 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
     if lst.get("xonalar"):
         params.append(f"▫️ {lst['xonalar']} xona")
     if lst.get("area"):
-        params.append(f"{int(lst['area'])} m²")
+        params.append(f"{int(lst['area'])}m²")
     if lst.get("floor") and lst.get("total_floors"):
         params.append(f"{lst['floor']}-etaj/{lst['total_floors']}")
     if params:
