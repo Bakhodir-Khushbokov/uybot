@@ -15,8 +15,11 @@ jobs:
           username: root
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
-            cd ~ && rm -rf uybot uybot.zip
+            cd ~
+            cp uybot/.env /tmp/uybot_env_backup 2>/dev/null || true
+            rm -rf uybot uybot.zip
             curl -L https://github.com/Bakhodir-Khushbokov/uybot/archive/refs/heads/main.zip -o uybot.zip
             unzip uybot.zip
             mv uybot-main uybot
+            cp /tmp/uybot_env_backup uybot/.env 2>/dev/null || true
             systemctl restart uybot
