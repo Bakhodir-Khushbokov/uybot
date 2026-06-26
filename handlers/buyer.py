@@ -112,8 +112,16 @@ async def buyer_tuman(cb: CallbackQuery, state: FSMContext):
     tuman = action
     data = await state.get_data()
     await state.update_data(tuman=tuman)
-    await _show_mahallalar_buyer(cb.message, state, data["viloyat"], tuman, offset=0, edit=True)
-    await state.set_state(BuyerStates.mahalla_page)
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    await cb.message.edit_text(
+        f"📍 <b>{tuman}</b>\n\nQanday qidirasiz?",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🏘 Butun tuman bo'ylab", callback_data="bscope:tuman")],
+            [InlineKeyboardButton(text="📍 Mahalla tanlash", callback_data="bscope:mahalla")],
+        ]),
+        parse_mode="HTML",
+    )
+    await state.set_state(BuyerStates.tuman)
     await cb.answer()
 
 
