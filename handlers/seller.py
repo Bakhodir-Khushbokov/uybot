@@ -501,12 +501,6 @@ async def seller_back(cb: CallbackQuery, state: FSMContext):
     target = cb.data.split(":")[1]
     current_state = await state.get_state()
 
-    # Faqat seller oqimida ishlaydi
-    seller_states = {s.state for s in SellerStates.__state_items__}
-    if current_state not in seller_states:
-        await cb.answer()
-        return
-
     data = await state.get_data()
 
     if target == "video":

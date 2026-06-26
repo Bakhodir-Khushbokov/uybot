@@ -314,7 +314,7 @@ def area_kb(prefix: str = "area", page: int = 0) -> InlineKeyboardMarkup:
     end   = min(start + PER_PAGE, 151)   # 150 gacha
 
     rows = []
-    chunk = [InlineKeyboardButton(text=str(n), callback_data=f"{prefix}:{n}")
+    chunk = [InlineKeyboardButton(text=f"{n}м²", callback_data=f"{prefix}:{n}")
              for n in range(start, end)]
     for i in range(0, len(chunk), 5):
         rows.append(chunk[i:i+5])
