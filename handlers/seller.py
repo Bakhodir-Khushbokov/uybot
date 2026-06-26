@@ -1105,8 +1105,34 @@ async def edit_listing(cb: CallbackQuery, state: FSMContext):
 
 
 # ── Mening e'lonlarim ────────────────────────────────────────
+async def _listing_short_label(lst: dict) -> str:
+    """Chilonzor-9 4xona 145000$ formatida qisqa nom."""
+    loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
+    bld = await db.get_building(lst["building_id"]) if lst.get("building_id") else None
+
+    tuman = ""
+    if loc:
+        t = loc.get("tuman", "")
+        tuman = t.replace(" tumani", "").replace(" shahri", "")
+
+    kvartal = bld.get("kvartal", "") if bld else ""
+    kvartal_part = f"-{kvartal}" if kvartal else ""
+
+    xon = lst.get("xonalar")
+    xon_part = f" {xon}xona" if xon else ""
+
+    narx = lst.get("price_display") or ""
+    cur = "$" if lst.get("price_currency") == "usd" else "so'm"
+    if narx:
+        narx_part = f" {narx}{cur}"
+    else:
+        narx_part = ""
+
+    return f"{tuman}{kvartal_part}{xon_part}{narx_part}".strip() or f"E'lon #{lst['id']}"
+
+
 async def _send_my_listings(chat_msg: Message, user_id: int, offset: int = 0):
-    """E'lonlarni sahifalab chiqarish."""
+    """E'lonlarni kompakt tugmalar bilan chiqarish."""
     from aiogram.types import InlineKeyboardMarkup
     listings = await db.get_seller_listings(user_id)
 
@@ -1118,61 +1144,61 @@ async def _send_my_listings(chat_msg: Message, user_id: int, offset: int = 0):
         )
         return
 
-    total  = len(listings)
-    chunk  = listings[offset:offset + 5]
-    STATUS = {"active": "✅ Faol", "pending": "⏳ Kutilmoqda",
-              "sold": "🤝 Sotildi", "deleted": "❌ O'chirilgan"}
+    total = len(listings)
+    STATUS = {"active": "✅", "pending": "⏳", "sold": "🤝", "deleted": "❌"}
+
+    buttons = []
+    for lst in listings:
+        label = await _listing_short_label(lst)
+        status_icon = STATUS.get(lst.get("status", ""), "❓")
+        buttons.append([InlineKeyboardButton(
+            text=f"{status_icon} {label}",
+            callback_data=f"mylst:view:{lst['id']}"
+        )])
 
     await chat_msg.answer(
         f"📋 <b>Sizning e'lonlaringiz:</b> {total} ta\n"
-        f"<i>({offset+1}–{min(offset+5, total)} ko'rsatilmoqda)</i>",
+        "👇 Boshqarish uchun e'lonni bosing:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML",
     )
-
-    for lst in chunk:
-        loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
-        status_label = STATUS.get(lst.get("status", ""), "❓")
-
-        text = (
-            f"{status_label} | <b>E'lon #{lst['id']}</b>\n"
-            f"{listing_full_card(lst, loc)}\n\n"
-            f"👁 Ko'rishlar: {lst.get('views_count', 0)}   "
-            f"📞 Aloqa: {lst.get('contact_count', 0)}"
-        )
-        can_manage = lst.get("status") in ("active", "pending")
-        reply_kb = listing_manage_kb(lst["id"]) if can_manage else None
-
-        try:
-            await chat_msg.answer_video(
-                video=lst["video_file_id"],
-                caption=text,
-                reply_markup=reply_kb,
-                parse_mode="HTML",
-            )
-        except Exception:
-            await chat_msg.answer(text, reply_markup=reply_kb, parse_mode="HTML")
-
-    # Paginatsiya
-    nav = []
-    if offset > 0:
-        nav.append(InlineKeyboardButton(
-            text="⬆️ Oldingi", callback_data=f"mylst:page:{offset-5}"))
-    if offset + 5 < total:
-        nav.append(InlineKeyboardButton(
-            text=f"⬇️ Ko'proq ({total - offset - 5} ta)",
-            callback_data=f"mylst:page:{offset+5}"))
-    if nav:
-        await chat_msg.answer(
-            f"_{offset+1}–{min(offset+5, total)} / {total}_",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[nav]),
-            parse_mode="Markdown",
-        )
 
 
 @router.message(F.text == "📋 Mening e'lonlarim")
 async def my_listings(msg: Message, state: FSMContext):
     await state.clear()
     await _send_my_listings(msg, msg.from_user.id, offset=0)
+
+
+@router.callback_query(F.data.startswith("mylst:view:"))
+async def my_listing_view(cb: CallbackQuery):
+    listing_id = int(cb.data.split(":")[2])
+    await cb.answer()
+    lst = await db.get_listing(listing_id)
+    if not lst:
+        await cb.answer("E'lon topilmadi", show_alert=True)
+        return
+    loc = await db.get_location(lst["location_id"]) if lst.get("location_id") else None
+    STATUS = {"active": "✅ Faol", "pending": "⏳ Kutilmoqda",
+              "sold": "🤝 Sotildi", "deleted": "❌ O'chirilgan"}
+    status_label = STATUS.get(lst.get("status", ""), "❓")
+    text = (
+        f"{status_label} | <b>E'lon #{lst['id']}</b>\n"
+        f"{listing_full_card(lst, loc)}\n\n"
+        f"👁 Ko'rishlar: {lst.get('views_count', 0)}   "
+        f"📞 Aloqa: {lst.get('contact_count', 0)}"
+    )
+    can_manage = lst.get("status") in ("active", "pending")
+    reply_kb = listing_manage_kb(lst["id"]) if can_manage else None
+    try:
+        await cb.message.answer_video(
+            video=lst["video_file_id"],
+            caption=text,
+            reply_markup=reply_kb,
+            parse_mode="HTML",
+        )
+    except Exception:
+        await cb.message.answer(text, reply_markup=reply_kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("mylst:page:"))
