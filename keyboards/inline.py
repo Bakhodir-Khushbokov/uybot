@@ -373,7 +373,8 @@ def balkon_kb() -> InlineKeyboardMarkup:
     return kb(
         [("1×3",   "blk:1x3"),   ("1.5×3", "blk:1.5x3")],
         [("1×7",   "blk:1x7"),   ("1.5×6", "blk:1.5x6")],
-        [("2×6",   "blk:2x6")],
+        [("2×3",   "blk:2x3"),   ("2×6",   "blk:2x6")],
+        [("3×9",   "blk:3x9")],
         [("❌ Balkonsiz", "blk:yoq")],
     )
 
