@@ -126,14 +126,14 @@ def check_banned(text: str) -> str | None:
 
 
 def listing_short_line(lst: dict) -> str:
-    """Qisqa qator: 'Orinter  2xona  50m²  2/9  65.000$  O'rtacha'"""
+    """Qisqa qator: 'Orinter  2xona  50м²  2/9  65.000$  O'rtacha'"""
     parts = []
     if lst.get("landmark"):
         parts.append(lst["landmark"])
     if lst.get("xonalar"):
         parts.append(f"{lst['xonalar']}xona")
     if lst.get("area"):
-        parts.append(f"{int(lst['area'])}m²")
+        parts.append(f"{int(lst['area'])}м²")
     if lst.get("floor") and lst.get("total_floors"):
         parts.append(f"{lst['floor']}-etaj/{lst['total_floors']}")
     if lst.get("price_display"):
@@ -201,7 +201,7 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
     if lst.get("xonalar"):
         params.append(f"▫️ {lst['xonalar']} xona")
     if lst.get("area"):
-        params.append(f"{int(lst['area'])}m²")
+        params.append(f"{int(lst['area'])}м²")
     if lst.get("floor") and lst.get("total_floors"):
         params.append(f"{lst['floor']}-etaj/{lst['total_floors']}")
     if params:

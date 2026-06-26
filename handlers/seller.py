@@ -770,7 +770,7 @@ async def seller_area_cb(cb: CallbackQuery, state: FSMContext):
     area = float(val)
     await state.update_data(area=area)
     await cb.message.edit_text(
-        f"📐 Maydon: {int(area)}m² ✅\n\nRemont turi?",
+        f"📐 Maydon: {int(area)}м² ✅\n\nRemont turi?",
         reply_markup=renovation_kb(),
     )
     await state.set_state(SellerStates.renovation)
