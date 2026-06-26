@@ -1137,11 +1137,7 @@ async def _listing_short_label(lst: dict) -> str:
     xon_part = f" {xon}xona" if xon else ""
 
     narx = lst.get("price_display") or ""
-    cur = "$" if lst.get("price_currency") == "usd" else "so'm"
-    if narx:
-        narx_part = f" {narx}{cur}"
-    else:
-        narx_part = ""
+    narx_part = f" {narx}" if narx else ""
 
     return f"{tuman}{kvartal_part}{xon_part}{narx_part}".strip() or f"E'lon #{lst['id']}"
 
