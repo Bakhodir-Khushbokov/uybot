@@ -1053,20 +1053,35 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
     except Exception:
         pass
 
+    lst_full = await db.get_listing(listing_id)
+    loc_full = await db.get_location(lst_full["location_id"]) if lst_full and lst_full.get("location_id") else None
+    card_text = listing_full_card(lst_full, loc_full) if lst_full else ""
+    admin_text = (
+        f"📥 <b>Yangi e'lon #{listing_id}</b>\n"
+        f"👤 @{cb.from_user.username or cb.from_user.id}\n\n"
+        f"{card_text}"
+    )
+    admin_kb = ikb(
+        [(f"✅ Faollashtirish", f"adm_lst:approve:{listing_id}"),
+         (f"❌ Rad etish",       f"adm_lst:reject:{listing_id}")],
+    )
     for admin_id in all_admin_ids:
         try:
-            await cb.bot.send_message(
-                admin_id,
-                f"📥 <b>Yangi e'lon #{listing_id}</b>\n"
-                f"Sotuvchi: @{cb.from_user.username or cb.from_user.id}\n"
-                f"Tur: {listing_data.get('property_type')} | {listing_data.get('transaction_type')}\n"
-                f"Narx: {listing_data.get('price_display', '—')}",
-                reply_markup=ikb(
-                    [(f"✅ Faollashtirish", f"adm_lst:approve:{listing_id}"),
-                     (f"❌ Rad etish",       f"adm_lst:reject:{listing_id}")],
-                ),
-                parse_mode="HTML",
-            )
+            if lst_full and lst_full.get("video_file_id"):
+                await cb.bot.send_video(
+                    admin_id,
+                    video=lst_full["video_file_id"],
+                    caption=admin_text,
+                    reply_markup=admin_kb,
+                    parse_mode="HTML",
+                )
+            else:
+                await cb.bot.send_message(
+                    admin_id,
+                    admin_text,
+                    reply_markup=admin_kb,
+                    parse_mode="HTML",
+                )
         except Exception:
             pass
 
