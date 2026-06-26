@@ -22,4 +22,6 @@ jobs:
             unzip uybot.zip
             mv uybot-main uybot
             cp /tmp/uybot_env_backup uybot/.env 2>/dev/null || true
-            systemctl restart uybot
+            systemctl stop uybot
+            sleep 3
+            systemctl start uybot
