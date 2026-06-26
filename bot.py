@@ -112,7 +112,7 @@ def format_listing(listing: dict, loc: dict) -> str:
         f"🏠 *{listing['xonalar']} xonali kvartira*",
         f"📍 {loc['viloyat']}, {loc['tuman']}, {loc['mahalla']}",
         f"🏢 Dom: {listing.get('dom_nomeri') or '—'}",
-        f"📐 Maydon: {listing['kvadrat']} m²",
+        f"📐 Maydon: {listing['kvadrat']}м²",
         f"🏗 Etaj: {listing['etaj']}/{listing['etajlilik']}",
         f"🔨 Holati: {sotix}",
     ]
@@ -237,7 +237,7 @@ async def seller_etaj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     ctx.user_data["etaj"] = etaj
     ctx.user_data["etajlilik"] = etajlilik
-    await update.message.reply_text("Uyning umumiy maydoni (m²)? Faqat raqam yozing:\nMasalan: *65*")
+    await update.message.reply_text("Uyning umumiy maydoni (м²)? Faqat raqam yozing:\nMasalan: *65*")
     return S_KVADRAT
 
 
@@ -516,7 +516,7 @@ async def seller_phone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"🏠 Xonalar: {ctx.user_data['xonalar']}\n"
         f"🔨 Holati: {sotix}\n"
         f"🏗 Etaj: {ctx.user_data['etaj']}/{ctx.user_data['etajlilik']}\n"
-        f"📐 Maydon: {ctx.user_data['kvadrat']} m²\n"
+        f"📐 Maydon: {ctx.user_data['kvadrat']}м²\n"
         f"🛋 Qoladi: {ctx.user_data.get('nima_qoladi') or '—'}\n"
         f"💰 Narx: {ctx.user_data['narx']}\n"
         f"📞 Tel: {phone}\n\n"

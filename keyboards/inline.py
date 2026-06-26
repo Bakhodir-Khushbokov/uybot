@@ -273,7 +273,7 @@ def floor_kb(prefix: str = "fl", page: int = 0) -> InlineKeyboardMarkup:
     else:
         nums = range(33, 47)
 
-    chunk = [InlineKeyboardButton(text=str(n), callback_data=f"{prefix}:{n}")
+    chunk = [InlineKeyboardButton(text=f"{n}-qavat", callback_data=f"{prefix}:{n}")
              for n in nums]
     # 4 ta ustun
     for i in range(0, len(chunk), 4):
