@@ -532,7 +532,7 @@ async def seller_back(cb: CallbackQuery, state: FSMContext):
         floor = data.get("floor", "?")
         await cb.message.edit_text(
             f"🏗 Qavat: {floor} ✅\n\n🏢 Bino jami necha qavatli?",
-            reply_markup=floor_kb(prefix="tf"),
+            reply_markup=floor_kb(prefix="tf", qavatli=True),
         )
         await state.set_state(SellerStates.total_floors)
 
@@ -725,7 +725,7 @@ async def seller_floor(cb: CallbackQuery, state: FSMContext):
     await state.update_data(floor=floor)
     await cb.message.edit_text(
         f"🏗 Qavat: {floor} ✅\n\n🏢 Bino jami necha qavatli?",
-        reply_markup=floor_kb(prefix="tf"),
+        reply_markup=floor_kb(prefix="tf", qavatli=True),
     )
     await state.set_state(SellerStates.total_floors)
     await cb.answer()
@@ -738,7 +738,7 @@ async def seller_total_floors(cb: CallbackQuery, state: FSMContext):
 
     if val.startswith("p"):
         page = int(val[1:])
-        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="tf", page=page))
+        await cb.message.edit_reply_markup(reply_markup=floor_kb(prefix="tf", page=page, qavatli=True))
         await cb.answer()
         return
 
