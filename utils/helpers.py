@@ -58,6 +58,9 @@ def format_price(amount: float, currency: str, rent_period: str = None) -> str:
             if qolgan_mln:
                 return f"{mlrd} mlrd {qolgan_mln} mln so'm{suffix}"
             return f"{mlrd} mlrd so'm{suffix}"
+        elif n >= 1_000_000:
+            mln = n // 1_000_000
+            return f"{mln} mln so'm{suffix}"
         else:
             return f"{spacify(n)} so'm{suffix}"
 
