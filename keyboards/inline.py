@@ -235,16 +235,16 @@ def xonalar_kb(prefix: str = "xon", with_any: bool = False,
     if page == 0:
         nums = range(1, 7)       # 1–6
     else:
-        nums = range(7, 16)      # 7–15
+        nums = range(7, 19)      # 7–18
 
-    chunk = [InlineKeyboardButton(text=str(n), callback_data=f"{prefix}:{n}")
+    chunk = [InlineKeyboardButton(text=f"{n}xona", callback_data=f"{prefix}:{n}")
              for n in nums]
     # 3 ta ustun
     for i in range(0, len(chunk), 3):
         rows.append(chunk[i:i+3])
 
     if page == 0:
-        rows.append([InlineKeyboardButton(text="➕ Ko'proq (7–15)",
+        rows.append([InlineKeyboardButton(text="➕ Ko'proq (7–18)",
                                           callback_data=f"{prefix}:p1")])
     else:
         rows.append([InlineKeyboardButton(text="⬅️ Kamroq (1–6)",
