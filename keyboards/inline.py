@@ -414,7 +414,7 @@ def kvartal_kb(kvartals: list[dict]) -> InlineKeyboardMarkup:
     row = []
     for kv in kvartals:
         n = kv["kvartal_n"]
-        row.append(InlineKeyboardButton(text=str(n), callback_data=f"kv:{n}"))
+        row.append(InlineKeyboardButton(text=f"{n}-kvartal", callback_data=f"kv:{n}"))
         if len(row) == 4:
             rows.append(row)
             row = []
@@ -451,7 +451,7 @@ def dom_kb(houses: list[dict], offset: int = 0, total: int = 0) -> InlineKeyboar
     row = []
     for h in houses:
         hn = h.get("dom_number") or h.get("house_number", "")
-        row.append(InlineKeyboardButton(text=hn, callback_data=f"dom:{hn}"))
+        row.append(InlineKeyboardButton(text=f"{hn}-dom", callback_data=f"dom:{hn}"))
         if len(row) == 4:
             rows.append(row)
             row = []
