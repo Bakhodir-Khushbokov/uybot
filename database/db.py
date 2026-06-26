@@ -443,26 +443,35 @@ async def update_listing_status(listing_id: int, status: str):
 async def search_listings(property_type: str, location_id: int = None,
                           xonalar: int = None, dom_type: str = None,
                           renovation: str = None, transaction_type: str = None,
+                          tuman: str = None, viloyat: str = None,
                           limit: int = 10, offset: int = 0) -> list[dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        conditions = ["status='active'", "property_type=?"]
+        conditions = ["l.status='active'", "l.property_type=?"]
         params: list = [property_type]
         if location_id:
-            conditions.append("location_id=?");       params.append(location_id)
+            conditions.append("l.location_id=?");       params.append(location_id)
+        elif tuman:
+            conditions.append("loc.tuman=?");            params.append(tuman)
+            if viloyat:
+                conditions.append("loc.viloyat=?");      params.append(viloyat)
         if xonalar:
-            conditions.append("xonalar=?");            params.append(xonalar)
+            conditions.append("l.xonalar=?");            params.append(xonalar)
         if dom_type:
-            conditions.append("dom_type=?");           params.append(dom_type)
+            conditions.append("l.dom_type=?");           params.append(dom_type)
         if renovation:
-            conditions.append("renovation=?");         params.append(renovation)
+            conditions.append("l.renovation=?");         params.append(renovation)
         if transaction_type:
-            conditions.append("transaction_type=?");   params.append(transaction_type)
+            conditions.append("l.transaction_type=?");   params.append(transaction_type)
         where = " AND ".join(conditions)
         params += [limit, offset]
-        cur = await db.execute(
-            f"SELECT * FROM listings WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            params)
+        if tuman and not location_id:
+            query = f"""SELECT l.* FROM listings l
+                        LEFT JOIN locations loc ON l.location_id=loc.id
+                        WHERE {where} ORDER BY l.created_at DESC LIMIT ? OFFSET ?"""
+        else:
+            query = f"SELECT * FROM listings l WHERE {where} ORDER BY l.created_at DESC LIMIT ? OFFSET ?"
+        cur = await db.execute(query, params)
         rows = await cur.fetchall()
         return [dict(r) for r in rows]
 

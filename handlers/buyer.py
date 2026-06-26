@@ -125,6 +125,27 @@ async def buyer_tuman(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
+@router.callback_query(BuyerStates.tuman, F.data.startswith("bscope:"))
+async def buyer_scope(cb: CallbackQuery, state: FSMContext):
+    scope = cb.data.split(":")[1]
+    data = await state.get_data()
+    if scope == "tuman":
+        await state.update_data(location_id=None, scope="tuman")
+        from keyboards.inline import property_type_kb
+        await cb.message.edit_text(
+            f"🏘 <b>Butun {data['tuman']} bo'ylab qidiramiz</b>\n\nMulk turini tanlang:",
+            reply_markup=property_type_kb("bpt"),
+            parse_mode="HTML",
+        )
+        from handlers.states import BuyerStates as BS
+        await state.set_state(BS.property_type)
+    else:
+        await _show_mahallalar_buyer(cb.message, state, data["viloyat"], data["tuman"], offset=0, edit=True)
+        from handlers.states import BuyerStates as BS
+        await state.set_state(BS.mahalla_page)
+    await cb.answer()
+
+
 # ── Mahalla pagination ───────────────────────────────────────────
 async def _show_mahallalar_buyer(msg, state, viloyat, tuman, offset=0, query="", edit=False):
     PER_PAGE = 8
@@ -260,6 +281,8 @@ async def _show_results(msg, state, offset=0, edit=False):
         dom_type=data.get("dom_type"),
         renovation=data.get("renovation"),
         transaction_type=data.get("transaction_type"),
+        tuman=data.get("tuman") if data.get("scope") == "tuman" else None,
+        viloyat=data.get("viloyat") if data.get("scope") == "tuman" else None,
         limit=PER_PAGE,
         offset=offset,
     )
@@ -288,6 +311,8 @@ async def _show_results(msg, state, offset=0, edit=False):
         dom_type=data.get("dom_type"),
         renovation=data.get("renovation"),
         transaction_type=data.get("transaction_type"),
+        tuman=data.get("tuman") if data.get("scope") == "tuman" else None,
+        viloyat=data.get("viloyat") if data.get("scope") == "tuman" else None,
         limit=200, offset=0,
     )
     total = len(total_results)
