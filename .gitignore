@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .DS_Store
 scripts/uzbekistan.osm.pbf
+uy_bot.db
