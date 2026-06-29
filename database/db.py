@@ -188,7 +188,7 @@ async def init_db():
 
     # migrations
     async with aiosqlite.connect(DB_PATH) as db:
-        for col, definition in [("is_blocked", "INTEGER DEFAULT 0")]:
+        for col, definition in [("is_blocked", "INTEGER DEFAULT 0"), ("display_name", "TEXT")]:
             try:
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
                 await db.commit()
@@ -211,18 +211,29 @@ async def init_db():
 # ─────────────────────────────────────────────────────────────
 async def upsert_user(telegram_id: int, phone: str = None,
                       language: str = None, role: str = None,
-                      full_name: str = None, username: str = None):
+                      full_name: str = None, username: str = None,
+                      display_name: str = None):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT INTO users (telegram_id, phone, language, role, full_name, username)
-            VALUES (?,?,?,?,?,?)
+            INSERT INTO users (telegram_id, phone, language, role, full_name, username, display_name)
+            VALUES (?,?,?,?,?,?,?)
             ON CONFLICT(telegram_id) DO UPDATE SET
-                phone     = COALESCE(excluded.phone,     phone),
-                language  = COALESCE(excluded.language,  language),
-                role      = COALESCE(excluded.role,      role),
-                full_name = COALESCE(excluded.full_name, full_name),
-                username  = COALESCE(excluded.username,  username)
-        """, (telegram_id, phone, language, role, full_name, username))
+                phone        = COALESCE(excluded.phone,        phone),
+                language     = COALESCE(excluded.language,     language),
+                role         = COALESCE(excluded.role,         role),
+                full_name    = COALESCE(excluded.full_name,    full_name),
+                username     = COALESCE(excluded.username,     username),
+                display_name = COALESCE(excluded.display_name, display_name)
+        """, (telegram_id, phone, language, role, full_name, username, display_name))
+        await db.commit()
+
+
+async def update_display_name(telegram_id: int, display_name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET display_name=? WHERE telegram_id=?",
+            (display_name, telegram_id)
+        )
         await db.commit()
 
 
@@ -248,7 +259,7 @@ async def get_user(telegram_id: int) -> dict | None:
 # ─────────────────────────────────────────────────────────────
 async def get_viloyatlar() -> list[str]:
     async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute("SELECT DISTINCT viloyat FROM locations")
+        cur = await db.execute("SELECT DISTINCT viloyat FROM locations WHERE viloyat < 'А'")
         rows = await cur.fetchall()
     all_v = [r[0] for r in rows]
     priority = ["Toshkent shahri", "Toshkent viloyati"]
@@ -265,7 +276,18 @@ async def get_tumanlar(viloyat: str) -> list[str]:
         return [r[0] for r in rows]
 
 
-async def search_mahallalar(viloyat: str, tuman: str, query: str = "", limit: int = 8, offset: int = 0) -> list[dict]:
+async def get_mahalla_letters(viloyat: str, tuman: str) -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """SELECT DISTINCT UPPER(SUBSTR(mahalla, 1, 1)) as letter
+               FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\'
+               ORDER BY letter""",
+            (viloyat, tuman))
+        rows = await cur.fetchall()
+        return [r[0] for r in rows]
+
+
+async def search_mahallalar(viloyat: str, tuman: str, query: str = "", limit: int = 8, offset: int = 0, letter: str = "") -> list[dict]:
     """
     If viloyat/tuman are empty strings, search across all locations by mahalla name.
     Used by admin panel for cross-location search.
@@ -273,24 +295,27 @@ async def search_mahallalar(viloyat: str, tuman: str, query: str = "", limit: in
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         if not viloyat and not tuman:
-            # Admin-style global search
             pat = f"%{query}%" if query else "%"
             cur = await db.execute(
                 "SELECT * FROM locations WHERE mahalla LIKE ? OR viloyat LIKE ? OR tuman LIKE ? ORDER BY viloyat,tuman,mahalla LIMIT ? OFFSET ?",
                 (pat, pat, pat, limit, offset))
         elif query:
             cur = await db.execute(
-                "SELECT * FROM locations WHERE viloyat=? AND tuman=? AND mahalla LIKE ? ORDER BY mahalla LIMIT ? OFFSET ?",
+                "SELECT * FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\' AND mahalla LIKE ? ORDER BY mahalla LIMIT ? OFFSET ?",
                 (viloyat, tuman, f"%{query}%", limit, offset))
+        elif letter:
+            cur = await db.execute(
+                "SELECT * FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\' AND UPPER(SUBSTR(mahalla,1,1))=? ORDER BY mahalla LIMIT ? OFFSET ?",
+                (viloyat, tuman, letter.upper(), limit, offset))
         else:
             cur = await db.execute(
-                "SELECT * FROM locations WHERE viloyat=? AND tuman=? ORDER BY mahalla LIMIT ? OFFSET ?",
+                "SELECT * FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\' ORDER BY mahalla LIMIT ? OFFSET ?",
                 (viloyat, tuman, limit, offset))
         rows = await cur.fetchall()
         return [dict(r) for r in rows]
 
 
-async def count_mahallalar(viloyat: str, tuman: str, query: str = "") -> int:
+async def count_mahallalar(viloyat: str, tuman: str, query: str = "", letter: str = "") -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         if not viloyat and not tuman:
             pat = f"%{query}%" if query else "%"
@@ -299,11 +324,15 @@ async def count_mahallalar(viloyat: str, tuman: str, query: str = "") -> int:
                 (pat, pat, pat))
         elif query:
             cur = await db.execute(
-                "SELECT COUNT(*) FROM locations WHERE viloyat=? AND tuman=? AND mahalla LIKE ?",
+                "SELECT COUNT(*) FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\' AND mahalla LIKE ?",
                 (viloyat, tuman, f"%{query}%"))
+        elif letter:
+            cur = await db.execute(
+                "SELECT COUNT(*) FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\' AND UPPER(SUBSTR(mahalla,1,1))=?",
+                (viloyat, tuman, letter.upper()))
         else:
             cur = await db.execute(
-                "SELECT COUNT(*) FROM locations WHERE viloyat=? AND tuman=?",
+                "SELECT COUNT(*) FROM locations WHERE viloyat=? AND tuman=? AND mahalla != \'\'",
                 (viloyat, tuman))
         row = await cur.fetchone()
         return row[0] if row else 0
@@ -396,8 +425,8 @@ async def add_listing(data: dict) -> int:
                lat, lon, video_file_id, xonalar, renovation, floor, total_floors,
                area, landmark, price_amount, price_currency, price_display, phone,
                transaction_type, rent_for, jihoz, balkon, has_commission,
-               kvartal, dom_number, tuman)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               kvartal, dom_number, tuman, yer_sotix, fasad)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             data["seller_id"], data["property_type"], data.get("dom_type"),
             data.get("location_id"), data.get("building_id"),
@@ -411,6 +440,7 @@ async def add_listing(data: dict) -> int:
             data.get("jihoz"), data.get("balkon"),
             1 if data.get("has_commission") else 0,
             data.get("kvartal"), data.get("dom_number"), data.get("tuman"),
+            data.get("yer_sotix"), data.get("fasad"),
         ))
         await db.commit()
         return cur.lastrowid
@@ -437,6 +467,15 @@ async def get_seller_listings(seller_id: int) -> list[dict]:
 async def update_listing_status(listing_id: int, status: str):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE listings SET status=? WHERE id=?", (status, listing_id))
+        await db.commit()
+
+
+async def update_listing_price(listing_id: int, amount: float, currency: str, display: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE listings SET price_amount=?, price_currency=?, price_display=? WHERE id=?",
+            (amount, currency, display, listing_id),
+        )
         await db.commit()
 
 
@@ -1077,14 +1116,27 @@ async def get_listing_favorites_users(listing_id: int) -> list[int]:
 
 # ─── Ko'cha va bino ma'lumotlari ───────────────────────────────────────────
 
-async def get_kvartals_by_tuman(tuman: str) -> list[dict]:
-    """Tuman bo'yicha kvartallar ro'yxati (bazadan)."""
+async def get_kvartals_by_tuman(tuman: str) -> list[str]:
+    """Tuman bo'yicha kvartallar ro'yxati (buildings jadvalidan)."""
+    import re as _re
     async with aiosqlite.connect(DB_PATH) as db:
-        rows = await (await db.execute(
-            "SELECT kvartal_n, lat, lon FROM kvartals WHERE tuman=? ORDER BY kvartal_n",
+        cur = await db.execute(
+            """SELECT DISTINCT b.kvartal FROM buildings b
+               JOIN locations l ON b.location_id = l.id
+               WHERE l.tuman=? AND b.kvartal != ''
+               ORDER BY b.kvartal""",
             (tuman,),
-        )).fetchall()
-        return [{"kvartal_n": r[0], "lat": r[1], "lon": r[2]} for r in rows]
+        )
+        rows = await cur.fetchall()
+    # Tuman asosiy so'zi (masalan "Sergeli tumani" -> "Sergeli")
+    main_word = tuman.split()[0].lower()
+    def nat_key(s):
+        m = _re.match(r'^(\D*?)(\d+)(.*)', s)
+        num = (m.group(1), int(m.group(2)), m.group(3)) if m else (s, 0, '')
+        # Tuman nomi bilan boshlanmaganlar oxiriga
+        priority = 0 if s.lower().startswith(main_word) else 1
+        return (priority,) + num
+    return sorted([r[0] for r in rows], key=nat_key)
 
 
 async def get_streets_by_kvartal(tuman: str, kvartal: str, query: str = "") -> list[str]:

@@ -63,7 +63,7 @@ def skip_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="➡️ O'tkazib yuborish")],
-            [KeyboardButton(text="❌ Bekor qilish")],
+            [KeyboardButton(text="⬅️ Ortga"), KeyboardButton(text="❌ Bekor qilish")],
         ],
         resize_keyboard=True,
     )

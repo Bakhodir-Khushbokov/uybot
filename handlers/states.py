@@ -29,6 +29,8 @@ class SellerStates(StatesGroup):
     # Video
     video          = State()
     # Ma'lumotlar
+    yer_sotix      = State()   # hovli/yer uchun: necha sotix
+    fasad          = State()   # hovli/yer uchun: fasad metri
     xonalar        = State()
     floor          = State()
     total_floors   = State()
@@ -45,6 +47,7 @@ class SellerStates(StatesGroup):
     price_amount   = State()
     # Tasdiqlash
     review         = State()
+    display_name_edit = State()
 
 
 class BuyerStates(StatesGroup):

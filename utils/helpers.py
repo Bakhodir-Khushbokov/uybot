@@ -201,6 +201,10 @@ def listing_full_card(lst: dict, loc: dict | None = None) -> str:
 
     # 3. Asosiy parametrlar — bir qatorda
     params = []
+    if lst.get("yer_sotix"):
+        params.append(f"▫️ {lst['yer_sotix']} sotix")
+    if lst.get("fasad"):
+        params.append(f"▫️ Fasad: {lst['fasad']} m")
     if lst.get("xonalar"):
         params.append(f"▫️ {lst['xonalar']} xona")
     if lst.get("area"):

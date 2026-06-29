@@ -15,6 +15,7 @@ def lang_kb() -> InlineKeyboardMarkup:
         [("🇺🇿 O'zbek (Lotin)", "lang:uz")],
         [("🇺🇿 Ўзбек (Кирилл)", "lang:uz_cyr")],
         [("🇷🇺 Русский",        "lang:ru")],
+        [("🇬🇧 English",         "lang:en")],
     )
 
 
@@ -63,6 +64,7 @@ def property_type_kb(prefix: str = "pt") -> InlineKeyboardMarkup:
          ("🏢 Kvartira",       f"{prefix}:kvartira")],
         [("🏬 Ofis / Noturar", f"{prefix}:ofis"),
          ("🌿 Yer",            f"{prefix}:yer")],
+        [("⬅️ Ortga", "back:transaction")],
     )
 
 
@@ -85,12 +87,7 @@ def viloyat_kb(viloyatlar: list[str], prefix: str = "vil",
         rows.append([(text, data)])
     row = []
     for v in viloyatlar:
-        if v == "Toshkent shahri":
-            short = "Toshkent shahar"
-        elif v == "Toshkent viloyati":
-            short = "Toshkent viloyati"
-        else:
-            short = v.replace(" viloyati", "").replace(" shahri", "")
+        short = v
         row.append((short, f"{prefix}:{v}"))
         if len(row) == 2:
             rows.append(row); row = []
@@ -134,7 +131,8 @@ def mahalla_kb(mahallalar: list[dict], total: int, offset: int,
     if nav:
         rows.append(nav)
     rows.append([InlineKeyboardButton(text="🔍 Qidirish", callback_data="search:mah"),
-                 InlineKeyboardButton(text="⬅️ Ortga",    callback_data="back:tuman")])
+                 InlineKeyboardButton(text="🔤 Harflar",   callback_data="back:mah_letters")])
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga",     callback_data="back:tuman")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -376,6 +374,7 @@ def balkon_kb() -> InlineKeyboardMarkup:
         [("2×3",   "blk:2x3"),   ("2×6",   "blk:2x6")],
         [("3×9",   "blk:3x9")],
         [("❌ Balkonsiz", "blk:yoq")],
+        [("⬅️ Ortga", "back:renovation")],
     )
 
 
@@ -410,19 +409,19 @@ def commission_kb() -> InlineKeyboardMarkup:
 
 
 # ── Kvartal tugmalari ─────────────────────────────────────────
-def kvartal_kb(kvartals: list[dict]) -> InlineKeyboardMarkup:
-    """Tuman bo'yicha kvartal tugmalari (4 qator, har birida 3 ta)."""
+def kvartal_kb(kvartals: list[str]) -> InlineKeyboardMarkup:
+    """Tuman bo'yicha kvartal tugmalari (list[str])."""
     rows = []
     row = []
     for kv in kvartals:
-        n = kv["kvartal_n"]
-        row.append(InlineKeyboardButton(text=f"{n}-kvartal", callback_data=f"kv:{n}"))
-        if len(row) == 4:
+        label = kv if len(kv) <= 18 else kv[:17] + "…"
+        row.append(InlineKeyboardButton(text=label, callback_data=f"kv:{kv[:60]}"))
+        if len(row) == 3:
             rows.append(row)
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel")])
+    rows.append([InlineKeyboardButton(text="⬅️ Ortga", callback_data="back:tuman")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -461,4 +460,23 @@ def dom_kb(houses: list[dict], offset: int = 0, total: int = 0) -> InlineKeyboar
         rows.append(row)
     rows.append([InlineKeyboardButton(text="✏️ Qo'lda yozish", callback_data="dom:manual")])
     rows.append([InlineKeyboardButton(text="◀️ Orqaga", callback_data="dom:back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Mahalla harf tanlash ──────────────────────────────────────
+def mahalla_letters_kb(letters: list[str]) -> InlineKeyboardMarkup:
+    # 4 tadan qator
+    rows = []
+    row = []
+    for i, letter in enumerate(letters):
+        row.append(InlineKeyboardButton(text=letter, callback_data=f"mah_letter:{letter}"))
+        if len(row) == 4:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([
+        InlineKeyboardButton(text="🔍 Qidirish", callback_data="search:mah"),
+        InlineKeyboardButton(text="⬅️ Ortga",    callback_data="back:tuman"),
+    ])
     return InlineKeyboardMarkup(inline_keyboard=rows)

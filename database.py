@@ -119,20 +119,51 @@ def get_tumanlar(viloyat: str):
     return [r["tuman"] for r in rows]
 
 
-def search_mahallalar(viloyat: str, tuman: str, query: str = ""):
+def get_mahalla_letters(viloyat: str, tuman: str) -> list[str]:
     db = conn()
+    rows = db.execute(
+        """SELECT DISTINCT UPPER(SUBSTR(mahalla, 1, 1)) as letter
+           FROM locations WHERE viloyat=? AND tuman=? AND mahalla != ''
+           ORDER BY letter""",
+        (viloyat, tuman),
+    ).fetchall()
+    db.close()
+    return [r["letter"] for r in rows]
+
+
+def search_mahallalar(viloyat: str, tuman: str, query: str = "",
+                      limit: int = 8, offset: int = 0, letter: str = ""):
+    db = conn()
+    params = [viloyat, tuman]
+    where = "viloyat=? AND tuman=? AND mahalla != ''"
     if query:
-        rows = db.execute(
-            "SELECT * FROM locations WHERE viloyat=? AND tuman=? AND mahalla LIKE ? ORDER BY mahalla LIMIT 30",
-            (viloyat, tuman, f"%{query}%"),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            "SELECT * FROM locations WHERE viloyat=? AND tuman=? ORDER BY mahalla LIMIT 30",
-            (viloyat, tuman),
-        ).fetchall()
+        where += " AND mahalla LIKE ?"
+        params.append(f"%{query}%")
+    elif letter:
+        where += " AND UPPER(SUBSTR(mahalla, 1, 1))=?"
+        params.append(letter.upper())
+    params += [limit, offset]
+    rows = db.execute(
+        f"SELECT * FROM locations WHERE {where} ORDER BY mahalla LIMIT ? OFFSET ?",
+        params,
+    ).fetchall()
     db.close()
     return [dict(r) for r in rows]
+
+
+def count_mahallalar(viloyat: str, tuman: str, query: str = "", letter: str = "") -> int:
+    db = conn()
+    params = [viloyat, tuman]
+    where = "viloyat=? AND tuman=? AND mahalla != ''"
+    if query:
+        where += " AND mahalla LIKE ?"
+        params.append(f"%{query}%")
+    elif letter:
+        where += " AND UPPER(SUBSTR(mahalla, 1, 1))=?"
+        params.append(letter.upper())
+    row = db.execute(f"SELECT COUNT(*) FROM locations WHERE {where}", params).fetchone()
+    db.close()
+    return row[0] if row else 0
 
 
 def get_location(location_id: int):

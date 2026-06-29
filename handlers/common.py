@@ -3,7 +3,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from handlers.states import RegStates
+from handlers.states import RegStates, SellerStates
 from keyboards.inline import lang_kb, role_kb
 from keyboards.reply  import phone_kb, main_menu_kb, cancel_kb
 from config import OWNER_IDS
@@ -126,3 +126,11 @@ async def help_cb(cb: CallbackQuery):
         "xonalar":       "Nechta xona bor? 1, 2, 3, 4 yoki 4+ dan birini tanlang.",
     }
     await cb.answer(texts.get(topic, "Yordam mavjud emas."), show_alert=True)
+
+
+# ── Ismni tahrirlash ─────────────────────────────────────────
+@router.message(F.text == "✏️ Ismni tahrirlash")
+async def edit_name_start(msg: Message, state: FSMContext):
+    await state.clear()
+    await msg.answer("✏️ Yangi ismingizni yozing (masalan: Ali yoki Ali Karimov):")
+    await state.set_state(SellerStates.display_name_edit)

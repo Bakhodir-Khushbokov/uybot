@@ -7,7 +7,7 @@ from handlers.states import SellerStates
 from keyboards.inline import (
     transaction_kb, rent_for_kb, balkon_kb, jihoz_kb, commission_kb,
     property_type_kb, dom_type_kb, viloyat_kb, tuman_kb,
-    mahalla_kb, buildings_kb, loc_confirm_kb,
+    mahalla_kb, mahalla_letters_kb, buildings_kb, loc_confirm_kb,
     renovation_kb, currency_kb, confirm_publish_kb, listing_manage_kb,
     xonalar_kb, floor_kb, area_kb,
     kvartal_kb, street_kb, dom_kb, STREETS_PAGE,
@@ -113,12 +113,14 @@ async def seller_tuman(cb: CallbackQuery, state: FSMContext):
     await state.update_data(tuman=tuman, mah_offset=0, mah_query="")
     data = await state.get_data()
 
-    # Toshkent shahri — kvartal tugmalari
-    if data.get("viloyat") == "Toshkent shahri":
+    # kvartira/ofis — kvartal, hovli/yer — mahalla
+    ptype = data.get("property_type", "")
+    if ptype in ("kvartira", "ofis"):
         await _show_kvartals(cb.message, state, tuman)
         await state.set_state(SellerStates.kvartal_page)
     else:
-        await _show_mahallalar(cb.message, state)
+        await state.update_data(mah_letter="", mah_query="")
+        await _show_mahalla_letters(cb.message, state)
         await state.set_state(SellerStates.mahalla_page)
     await cb.answer()
 
@@ -140,8 +142,7 @@ async def _show_kvartals(msg, state: FSMContext, tuman: str):
 
 @router.callback_query(SellerStates.kvartal_page, F.data.startswith("kv:"))
 async def seller_kvartal_pick(cb: CallbackQuery, state: FSMContext):
-    kvartal_n = int(cb.data[3:])
-    kvartal = f"{kvartal_n}-kvartal"
+    kvartal = cb.data[3:]
     data = await state.get_data()
     tuman = data["tuman"]
     await state.update_data(kvartal=kvartal, mahalla_name=kvartal)
@@ -281,11 +282,24 @@ async def seller_dom_pick(cb: CallbackQuery, state: FSMContext):
         lon=coords["lon"] if coords else None,
         location_id=None,
     )
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⬅️ Ortga (boshqa dom)", callback_data="back:dom_list")
+    ]])
     await cb.message.edit_text(
         f"✅ Manzil saqlandi:\n<b>{address_label}</b>",
         parse_mode="HTML",
+        reply_markup=back_kb,
     )
-    await _ask_video(cb.message, state)
+    if coords:
+        try:
+            loc_msg = await cb.bot.send_location(cb.from_user.id, latitude=coords["lat"], longitude=coords["lon"])
+            await state.update_data(_loc_msg_id=loc_msg.message_id)
+        except Exception:
+            pass
+    video_msg = await _ask_video(cb.message, state)
+    if video_msg:
+        await state.update_data(_video_msg_id=video_msg.message_id)
     await cb.answer()
 
 
@@ -297,21 +311,48 @@ async def seller_dom_back(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
+async def _show_mahalla_letters(msg, state: FSMContext, edit: bool = True):
+    data = await state.get_data()
+    viloyat = data["viloyat"]
+    tuman = data["tuman"]
+    letters = await db.get_mahalla_letters(viloyat, tuman)
+    text = f"*{tuman}* — Mahallaning bosh harfini tanlang:"
+    kb = mahalla_letters_kb(letters)
+    if edit:
+        await msg.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+    else:
+        await msg.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+
 async def _show_mahallalar(msg, state: FSMContext, edit: bool = True):
     data   = await state.get_data()
     viloyat= data["viloyat"]
     tuman  = data["tuman"]
     query  = data.get("mah_query", "")
+    letter = data.get("mah_letter", "")
     offset = data.get("mah_offset", 0)
 
-    mahallalar = await db.search_mahallalar(viloyat, tuman, query, PAGE, offset)
-    total      = await db.count_mahallalar(viloyat, tuman, query)
-    text = f"*{tuman}* — Mahallani tanlang:\n_({total} ta topildi)_"
-    kb   = mahalla_kb(mahallalar, total, offset)
-    if edit:
-        await msg.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+    mahallalar = await db.search_mahallalar(viloyat, tuman, query, PAGE, offset, letter)
+    total      = await db.count_mahallalar(viloyat, tuman, query, letter)
+    if query:
+        header = f"🔍 *{query}* — natijalar: {total} ta"
+    elif letter:
+        header = f"*{tuman}* — *{letter}* harfidan boshlanadigan mahallalar ({total} ta)"
     else:
-        await msg.answer(text, reply_markup=kb, parse_mode="Markdown")
+        header = f"*{tuman}* — Mahallani tanlang ({total} ta)"
+    kb = mahalla_kb(mahallalar, total, offset)
+    if edit:
+        await msg.edit_text(header, reply_markup=kb, parse_mode="Markdown")
+    else:
+        await msg.answer(header, reply_markup=kb, parse_mode="Markdown")
+
+
+@router.callback_query(SellerStates.mahalla_page, F.data.startswith("mah_letter:"))
+async def seller_mah_letter(cb: CallbackQuery, state: FSMContext):
+    letter = cb.data.split(":")[1]
+    await state.update_data(mah_letter=letter, mah_offset=0, mah_query="")
+    await _show_mahallalar(cb.message, state)
+    await cb.answer()
 
 
 @router.callback_query(SellerStates.mahalla_page, F.data.startswith("mah_page:"))
@@ -333,7 +374,7 @@ async def ask_mah_search(cb: CallbackQuery, state: FSMContext):
 async def seller_mah_search(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         return
-    await state.update_data(mah_query=msg.text.strip(), mah_offset=0)
+    await state.update_data(mah_query=msg.text.strip(), mah_offset=0, mah_letter="")
     await _show_mahallalar(msg, state, edit=False)
     await state.set_state(SellerStates.mahalla_page)
 
@@ -345,8 +386,7 @@ async def seller_mahalla_pick(cb: CallbackQuery, state: FSMContext):
     await state.update_data(location_id=loc_id)
 
     await cb.message.edit_text(
-        "Dom raqami yoki nomini yozing:\n"
-        "_Masalan: 14-A yoki Navruz ko'chasi 22_\n\n"
+        "Uy raqamini yozing:\n\n"
         "Bilmasangiz — «—» yozing",
         parse_mode="Markdown",
     )
@@ -503,7 +543,12 @@ async def seller_back(cb: CallbackQuery, state: FSMContext):
 
     data = await state.get_data()
 
-    if target == "video":
+    if target == "mah_letters":
+        await state.update_data(mah_letter="", mah_query="", mah_offset=0)
+        await _show_mahalla_letters(cb.message, state)
+        await state.set_state(SellerStates.mahalla_page)
+
+    elif target == "video":
         await cb.message.edit_reply_markup(reply_markup=None)
         await _ask_video(cb.message, state)
 
@@ -556,12 +601,98 @@ async def seller_back(cb: CallbackQuery, state: FSMContext):
         await cb.message.edit_text("Narx valyutasi?", reply_markup=currency_kb())
         await state.set_state(SellerStates.price_currency)
 
+    elif target == "transaction":
+        await cb.message.edit_text(
+            "🏷 *Sotasizmi yoki ijaraga berasizmi?*",
+            reply_markup=transaction_kb(),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.transaction)
+
+    elif target == "property_type":
+        await cb.message.edit_text(
+            f"{make_progress(1, 6)}\n\n🏠 Mulk turini tanlang:",
+            reply_markup=property_type_kb("pt"),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.property_type)
+
+    elif target == "dom_type":
+        ptype = data.get("property_type", "")
+        if ptype in ("kvartira", "ofis"):
+            await cb.message.edit_text(
+                f"{make_progress(1, 6)}\n\nDom qanday?",
+                reply_markup=dom_type_kb(),
+                parse_mode="Markdown",
+            )
+            await state.set_state(SellerStates.dom_type)
+        else:
+            await cb.message.edit_text(
+                f"{make_progress(1, 6)}\n\n🏠 Mulk turini tanlang:",
+                reply_markup=property_type_kb("pt"),
+                parse_mode="Markdown",
+            )
+            await state.set_state(SellerStates.property_type)
+
+    elif target == "viloyat":
+        viloyatlar = await db.get_viloyatlar()
+        await cb.message.edit_text(
+            f"{make_progress(2, 6)}\n\n📍 Viloyatni tanlang:",
+            reply_markup=viloyat_kb(viloyatlar),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.viloyat)
+
+    elif target == "tuman":
+        viloyat = data.get("viloyat", "")
+        tumanlar = await db.get_tumanlar(viloyat)
+        await cb.message.edit_text(
+            f"*{viloyat}* — Tumanni tanlang:",
+            reply_markup=tuman_kb(tumanlar),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.tuman)
+
+    elif target == "balkon":
+        await cb.message.edit_text(
+            "🏗 *Balkon bormi?*\nO'lchamini tanlang:",
+            reply_markup=balkon_kb(),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.balkon)
+
+    elif target == "price":
+        await cb.message.edit_text("Narx valyutasi?", reply_markup=currency_kb())
+        await state.set_state(SellerStates.price_currency)
+
+    elif target == "dom_list":
+        tuman = data.get("tuman", "")
+        kvartal = data.get("kvartal", "")
+        chat_id = cb.from_user.id
+        # Lokatsiya xabarini o'chir
+        loc_msg_id = data.get("_loc_msg_id")
+        if loc_msg_id:
+            try:
+                await cb.bot.delete_message(chat_id, loc_msg_id)
+            except Exception:
+                pass
+        # Video so'rov xabarini o'chir
+        vid_msg_id = data.get("_video_msg_id")
+        if vid_msg_id:
+            try:
+                await cb.bot.delete_message(chat_id, vid_msg_id)
+            except Exception:
+                pass
+        await state.update_data(dom_offset=0, _loc_msg_id=None, _video_msg_id=None)
+        await _show_doms(cb.message, state, tuman, kvartal)
+        await state.set_state(SellerStates.dom_number)
+
     await cb.answer()
 
 
 # ── 3. Video ─────────────────────────────────────────────────
 async def _ask_video(msg, state: FSMContext):
-    await msg.answer(
+    sent = await msg.answer(
         f"{make_progress(3, 6)}\n\n"
         "🎙 _Uyingizni 3 daqiqagacha video qilib yuboring._\n\n"
         "📹 Video yuboring:",
@@ -569,6 +700,7 @@ async def _ask_video(msg, state: FSMContext):
         parse_mode="Markdown",
     )
     await state.set_state(SellerStates.video)
+    return sent
 
 
 @router.message(SellerStates.video, F.video)
@@ -630,7 +762,11 @@ async def got_video(msg: Message, state: FSMContext):
     await state.update_data(video_file_id=permanent_file_id)
     await wait.delete()
     await msg.answer("✅ Video qabul qilindi!")
-    await _ask_xonalar(msg, state)
+    data = await state.get_data()
+    if data.get("property_type") in ("hovli", "yer"):
+        await _ask_yer_sotix(msg, state)
+    else:
+        await _ask_xonalar(msg, state)
 
 
 @router.message(SellerStates.video, F.document)
@@ -674,6 +810,45 @@ async def video_wrong(msg: Message):
     )
 
 
+# ── 4a. Yer sotix (hovli/yer uchun) ─────────────────────────
+async def _ask_yer_sotix(msg, state: FSMContext):
+    await msg.answer(
+        f"{make_progress(4, 6)}\n\n"
+        "📐 Necha sotix?",
+        reply_markup=cancel_kb(),
+    )
+    await state.set_state(SellerStates.yer_sotix)
+
+
+@router.message(SellerStates.yer_sotix)
+async def seller_yer_sotix(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish":
+        return
+    sotix = msg.text.strip()
+    if not sotix:
+        await msg.answer("Iltimos, sotix miqdorini kiriting (masalan: 8)")
+        return
+    await state.update_data(yer_sotix=sotix)
+    await msg.answer(
+        f"📐 Sotix: {sotix} ✅\n\n"
+        "📏 Fasad (tashqi tomoni) necha metr?",
+        reply_markup=cancel_kb(),
+    )
+    await state.set_state(SellerStates.fasad)
+
+
+@router.message(SellerStates.fasad)
+async def seller_fasad(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish":
+        return
+    fasad = msg.text.strip()
+    if not fasad:
+        await msg.answer("Iltimos, fasad uzunligini kiriting (masalan: 12)")
+        return
+    await state.update_data(fasad=fasad)
+    await _ask_xonalar(msg, state)
+
+
 # ── 4. Xonalar ───────────────────────────────────────────────
 async def _ask_xonalar(msg, state: FSMContext):
     await msg.answer(
@@ -696,11 +871,22 @@ async def seller_xonalar(cb: CallbackQuery, state: FSMContext):
 
     xon = int(val)
     await state.update_data(xonalar=xon)
-    await cb.message.edit_text(
-        f"🛏 Xonalar: {xon} ta ✅\n\n🏗 Nechanchi qavatda?",
-        reply_markup=floor_kb(prefix="fl"),
-    )
-    await state.set_state(SellerStates.floor)
+    data = await state.get_data()
+    if data.get("property_type") in ("hovli", "yer"):
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await cb.message.answer(
+            "📌 Mo'ljal (ixtiyoriy):\n"
+            "Yaqin yerda nima bor? Masalan: Korzinka yaqini, Metro, Maktab...\n\n"
+            "Bilmasangiz — o'tkazib yuboring 👇",
+            reply_markup=skip_kb(),
+        )
+        await state.set_state(SellerStates.landmark)
+    else:
+        await cb.message.edit_text(
+            f"🛏 Xonalar: {xon} ta ✅\n\n🏗 Nechanchi qavatda?",
+            reply_markup=floor_kb(prefix="fl"),
+        )
+        await state.set_state(SellerStates.floor)
     await cb.answer()
 
 
@@ -822,6 +1008,18 @@ async def seller_landmark(msg: Message, state: FSMContext):
         return
     if msg.text == "❌ Bekor qilish":
         return
+    if msg.text == "⬅️ Ortga":
+        data = await state.get_data()
+        if data.get("property_type") in ("hovli", "yer"):
+            await _ask_xonalar(msg, state)
+            return
+        await msg.answer(
+            "🏗 *Balkon bormi?*\nO'lchamini tanlang:",
+            reply_markup=balkon_kb(),
+            parse_mode="Markdown",
+        )
+        await state.set_state(SellerStates.balkon)
+        return
     landmark = "" if msg.text.strip() in ("➡️ O'tkazib yuborish", "O'tkazib yuborish") else msg.text.strip()
     await state.update_data(landmark=landmark)
 
@@ -938,6 +1136,20 @@ async def seller_price(msg: Message, state: FSMContext):
     await state.update_data(price_amount=amount, price_display=display)
 
     data2 = await state.get_data()
+
+    # Mening e'lonlarimdan narx tahrirlash
+    if data2.get("edit_listing_id"):
+        listing_id = data2["edit_listing_id"]
+        await db.update_listing_price(listing_id, amount, cur, display)
+        await state.clear()
+        await msg.answer(
+            f"✅ Narx yangilandi: <b>{display}</b>\n\n"
+            "Yangi narx e'loningizda ko'rinadi.",
+            reply_markup=main_menu_kb("seller"),
+            parse_mode="HTML",
+        )
+        return
+
     if data2.get("transaction_type") == "arenda":
         await msg.answer(
             "👥 *Ijara kimlarga mo'ljallangan?*",
@@ -946,7 +1158,50 @@ async def seller_price(msg: Message, state: FSMContext):
         )
         await state.set_state(SellerStates.rent_for)
     else:
-        await _show_review(msg, state)
+        await _ask_display_name(msg, state)
+
+
+async def _ask_display_name(msg, state: FSMContext):
+    user = await db.get_user(msg.from_user.id if hasattr(msg, "from_user") else msg.chat.id)
+    saved_name = (user.get("display_name") or user.get("full_name") or "") if user else ""
+    from keyboards.inline import kb as ikb
+    kb_name = ikb(
+        *([[("✅ Ha, " + saved_name, "dname:keep")]] if saved_name else []),
+        [("✏️ Boshqa ism kiriting", "dname:edit")],
+    )
+    await msg.answer(
+        f"👤 <b>E'londa qanday ism ko'rsatilsin?</b>\n\n"
+        f"Hozirgi: <b>{saved_name or 'Mavjud emas'}</b>",
+        reply_markup=kb_name,
+        parse_mode="HTML",
+    )
+    await state.set_state(SellerStates.display_name_edit)
+
+
+@router.callback_query(SellerStates.display_name_edit, F.data == "dname:keep")
+async def dname_keep(cb: CallbackQuery, state: FSMContext):
+    await cb.message.edit_text("✅ Ism saqlandi.")
+    await _show_review(cb.message, state)
+    await cb.answer()
+
+
+@router.callback_query(SellerStates.display_name_edit, F.data == "dname:edit")
+async def dname_edit_ask(cb: CallbackQuery, state: FSMContext):
+    await cb.message.edit_text("✏️ Ismingizni yozing (masalan: Ali yoki Ali Karimov):")
+    await cb.answer()
+
+
+@router.message(SellerStates.display_name_edit)
+async def dname_edit_save(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish":
+        return
+    name = msg.text.strip()
+    if len(name) < 2 or len(name) > 50:
+        await msg.answer("Iltimos, 2–50 ta belgidan iborat ism kiriting.")
+        return
+    await db.update_display_name(msg.from_user.id, name)
+    await msg.answer(f"✅ Ism saqlandi: <b>{name}</b>", parse_mode="HTML")
+    await _show_review(msg, state)
 
 
 @router.callback_query(SellerStates.rent_for, F.data.startswith("rf:"))
@@ -968,10 +1223,12 @@ async def _show_review(msg: Message, state: FSMContext):
     loc   = await db.get_location(data.get("location_id")) if data.get("location_id") else None
     user  = await db.get_user(msg.from_user.id)
     phone = user.get("phone", "") if user else ""
+    display_name = (user.get("display_name") or user.get("full_name") or "") if user else ""
 
     # listing_full_card uchun data dict ni moslashtirish
     preview_lst = dict(data)
     preview_lst["phone"] = phone
+    preview_lst["display_name"] = display_name
     if data.get("jihoz_selected"):
         import json as _json
         preview_lst["jihoz"] = _json.dumps(data["jihoz_selected"])
@@ -1012,6 +1269,7 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
         "jihoz":            __import__("json").dumps(data.get("jihoz_selected") or [], ensure_ascii=False) if data.get("jihoz_selected") else None,
         "has_commission":   data.get("has_commission", False),
         "phone":            user.get("phone") if user else "",
+        "display_name":     (user.get("display_name") or user.get("full_name") or "") if user else "",
         "kvartal":          data.get("kvartal"),
         "dom_number":       data.get("dom_number"),
         "tuman":            data.get("tuman"),
@@ -1082,6 +1340,20 @@ async def publish_listing(cb: CallbackQuery, state: FSMContext):
                     reply_markup=admin_kb,
                     parse_mode="HTML",
                 )
+        except Exception:
+            pass
+
+    # Lokatsiya avtomatik yuborish
+    lat = data.get("lat")
+    lon = data.get("lon")
+    if lat and lon:
+        try:
+            tuman    = data.get("tuman", "")
+            kvartal  = data.get("kvartal", "")
+            dom_n    = data.get("dom_number", "")
+            loc_text = f"📍 {tuman}, {kvartal}, {dom_n}-uy" if dom_n else f"📍 {tuman}, {kvartal}"
+            await cb.message.answer(loc_text)
+            await cb.bot.send_location(cb.from_user.id, latitude=float(lat), longitude=float(lon))
         except Exception:
             pass
 
@@ -1217,6 +1489,33 @@ async def my_listings_page(cb: CallbackQuery):
     offset = int(cb.data.split(":")[2])
     await cb.answer()
     await _send_my_listings(cb.message, cb.from_user.id, offset=offset)
+
+
+# ── Narx tushirish ───────────────────────────────────────────
+@router.callback_query(F.data.startswith("lst:price:"))
+async def lst_price_edit(cb: CallbackQuery, state: FSMContext):
+    listing_id = int(cb.data.split(":")[2])
+    lst = await db.get_listing(listing_id)
+    if not lst:
+        await cb.answer("E'lon topilmadi", show_alert=True)
+        return
+    cur = lst.get("price_currency", "usd")
+    if cur == "usd":
+        hint = "Masalan: 47.500 (47 ming 500 dollar)"
+    else:
+        hint = "Masalan: 350 (350 mln so'm)"
+    await state.update_data(
+        edit_listing_id=listing_id,
+        price_currency=cur,
+    )
+    await cb.message.answer(
+        f"📉 <b>Yangi narxni kiriting:</b>\n{hint}\n\n"
+        f"Hozirgi narx: {lst.get('price_display', '—')}",
+        reply_markup=cancel_kb(),
+        parse_mode="HTML",
+    )
+    await state.set_state(SellerStates.price_amount)
+    await cb.answer()
 
 
 # ── Sotildi / O'chirish ──────────────────────────────────────
